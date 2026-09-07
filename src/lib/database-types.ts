@@ -60,6 +60,7 @@ export interface Database {
           hora_fin: string;
           cupo_max: number;
           activo: boolean;
+          requiere_materiales: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -75,6 +76,7 @@ export interface Database {
           hora_fin: string;
           cupo_max: number;
           activo?: boolean;
+          requiere_materiales?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -89,6 +91,7 @@ export interface Database {
           hora_fin?: string;
           cupo_max?: number;
           activo?: boolean;
+          requiere_materiales?: boolean;
         };
         Relationships: [];
       };

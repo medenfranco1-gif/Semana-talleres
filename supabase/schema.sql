@@ -54,6 +54,7 @@ create table if not exists public.talleres (
   hora_fin      time not null,
   cupo_max      integer not null check (cupo_max > 0),
   activo        boolean not null default true,
+  requiere_materiales boolean not null default true,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now(),
   constraint talleres_horario_valido check (hora_fin > hora_inicio),
@@ -61,6 +62,13 @@ create table if not exists public.talleres (
 );
 
 comment on table public.talleres is 'Talleres del evento. dia=1..3. cupos controlados por trigger.';
+comment on column public.talleres.requiere_materiales is 'Si es false, el taller no requiere que el alumno compre materiales; en ese caso se pide traer un alimento no perecedero como colaboración.';
+
+-- Migración defensiva: si la tabla ya existía de antes (deploy previo sin esta
+-- columna), la agregamos sin romper nada. `create table if not exists` de
+-- arriba no toca tablas ya creadas, así que este ALTER cubre ese caso.
+alter table public.talleres
+  add column if not exists requiere_materiales boolean not null default true;
 
 -- inscripciones: relación alumno ↔ taller
 create table if not exists public.inscripciones (
@@ -194,6 +202,42 @@ begin
 end;
 $$;
 
+-- 2c-bis) helper: ¿el alumno ya está inscripto a ESTE MISMO taller en otro
+-- día de la semana? Un taller puede repetirse (mismo título) en más de un día
+-- del evento (ej. el mismo curso dictado día 1 y día 2); esta función bloquea
+-- que un alumno se anote dos veces al mismo taller durante toda la semana,
+-- sin importar en qué día. Compara por título normalizado (trim + minúsculas)
+-- para cubrir tanto la fila exacta como sus repeticiones en otros días.
+create or replace function public.alumno_tiene_taller_en_semana(
+  p_alumno_id uuid,
+  p_taller_id uuid
+) returns boolean
+language plpgsql
+stable
+as $$
+declare
+  v_titulo text;
+  v_existe boolean;
+begin
+  select titulo into v_titulo from public.talleres where id = p_taller_id;
+
+  if not found then
+    raise exception 'El taller no existe.';
+  end if;
+
+  select exists (
+    select 1
+    from public.inscripciones i
+    join public.talleres t on t.id = i.taller_id
+    where i.alumno_id = p_alumno_id
+      and i.taller_id <> p_taller_id
+      and lower(btrim(t.titulo)) = lower(btrim(v_titulo))
+  ) into v_existe;
+
+  return v_existe;
+end;
+$$;
+
 -- 2d) handler: trigger BEFORE INSERT en inscripciones — valida todas las reglas
 -- CONCURRENCIA: dos INSERTs simultáneos (al mismo taller, o del mismo alumno
 -- a talleres incompatibles) podrían pasar los chequeos a la vez. Para evitarlo
@@ -261,6 +305,11 @@ begin
     raise exception 'Ya tenés un taller de la categoría "%" inscripto ese día.', v_taller.categoria;
   end if;
 
+  -- 4bis) mismo taller repetido en otro día de la semana
+  if public.alumno_tiene_taller_en_semana(new.alumno_id, new.taller_id) then
+    raise exception 'Ya estás anotado a este taller en otro día de la semana.';
+  end if;
+
   -- 5) inscripciones abiertas (global + día)
   select c.inscripciones_abiertas_global,
          case v_taller.dia
@@ -324,6 +373,84 @@ begin
 end;
 $$;
 
+-- 2g) ASIGNACIÓN AUTOMÁTICA: a los alumnos que no se anotaron a NINGÚN
+-- taller, les asigna al azar uno con cupo disponible. Pensada para correrse
+-- una sola vez, cerca del cierre de inscripciones, desde el panel admin.
+-- security definer porque el admin la invoca vía RPC con el cliente normal
+-- (RLS de inscripciones exige alumno_id = alumno actual, así que sin esto
+-- no podría insertar a nombre de otros alumnos).
+-- Reutiliza el INSERT normal (no las columnas a mano) para que pase por el
+-- trigger `validar_inscripcion` de siempre: respeta cupo, activo e
+-- inscripciones abiertas. Como el alumno no tiene ninguna inscripción previa,
+-- solapamiento/categoría/repetido-en-semana nunca pueden bloquearlo.
+-- Si un taller se queda sin cupo entre el sorteo y el insert (otro alumno se
+-- adelantó), prueba con el siguiente taller candidato de la lista aleatoria.
+create or replace function public.asignar_talleres_pendientes()
+returns table(alumno_id uuid, taller_id uuid, error text)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_alumno   record;
+  v_taller   record;
+  v_asignado boolean;
+begin
+  -- solo un admin puede correr esta asignación masiva (aunque la función es
+  -- security definer y podría saltear RLS, esto evita que cualquier usuario
+  -- autenticado la invoque por RPC directamente).
+  if not public.es_admin() then
+    raise exception 'No tenés permiso para ejecutar esta acción.';
+  end if;
+
+  for v_alumno in
+    select a.id
+    from public.alumnos a
+    where a.rol = 'alumno'
+      and not exists (
+        select 1 from public.inscripciones i where i.alumno_id = a.id
+      )
+  loop
+    v_asignado := false;
+
+    for v_taller in
+      select t.id
+      from public.talleres t
+      where t.activo = true
+        and public.cupo_actual_taller(t.id) < t.cupo_max
+      order by random()
+    loop
+      begin
+        insert into public.inscripciones (alumno_id, taller_id)
+        values (v_alumno.id, v_taller.id);
+        alumno_id := v_alumno.id;
+        taller_id := v_taller.id;
+        error := null;
+        v_asignado := true;
+        return next;
+        exit; -- ya se anotó a un taller, pasar al siguiente alumno
+      exception when others then
+        -- ese taller falló (se llenó justo ahora, día cerrado, etc.):
+        -- probar con el siguiente taller candidato de la lista aleatoria.
+        continue;
+      end;
+    end loop;
+
+    if not v_asignado then
+      alumno_id := v_alumno.id;
+      taller_id := null;
+      error := 'No se encontró ningún taller con cupo disponible.';
+      return next;
+    end if;
+  end loop;
+
+  return;
+end;
+$$;
+
+comment on function public.asignar_talleres_pendientes() is
+  'Anota al azar, en un taller con cupo disponible, a cada alumno que todavía no tenga ninguna inscripción. Devuelve una fila por alumno procesado.';
+
 -- ---------------------------------------------------------------------
 -- 3. TRIGGERS
 -- ---------------------------------------------------------------------
@@ -381,6 +508,12 @@ as $$
     where a.auth_user_id = auth.uid() and a.rol = 'admin'
   );
 $$;
+
+-- Permite invocar la asignación masiva vía RPC desde el cliente autenticado
+-- (la función igual re-chequea es_admin() por dentro, esto solo habilita la
+-- llamada; sin este grant, PostgREST devuelve "permission denied" incluso
+-- para admins).
+grant execute on function public.asignar_talleres_pendientes() to authenticated;
 
 -- Helper: auth_user_id del alumno actual
 create or replace function public.alumno_actual_id()

@@ -6,6 +6,7 @@ export type MotivoBloqueo =
   | { tipo: "solapamiento" }
   | { tipo: "mismacategoria" }
   | { tipo: "yainscripto" }
+  | { tipo: "mismotallersemana" }
   | { tipo: "noabierto" }
   | null;
 
@@ -49,13 +50,21 @@ export function evaluarBloqueoCliente(
     if (!diaAbierto) return { tipo: "noabierto" };
   }
 
-  // inscriptos del alumno ese día
-  const inscriptosDia = inscripciones
+  // talleres en los que el alumno ya está inscripto (cualquier día)
+  const inscriptos = inscripciones
     .map((i) => talleresMap[i.taller_id])
-    .filter(
-      (t): t is Taller =>
-        !!t && t.dia === taller.dia && t.id !== taller.id,
-    );
+    .filter((t): t is Taller => !!t && t.id !== taller.id);
+
+  // mismo taller repetido en otro día de la semana (compara por título,
+  // igual que el trigger backend `alumno_tiene_taller_en_semana`)
+  const tituloNorm = taller.titulo.trim().toLowerCase();
+  const mismoTallerSemana = inscriptos.some(
+    (t) => t.titulo.trim().toLowerCase() === tituloNorm,
+  );
+  if (mismoTallerSemana) return { tipo: "mismotallersemana" };
+
+  // inscriptos del alumno ese mismo día
+  const inscriptosDia = inscriptos.filter((t) => t.dia === taller.dia);
 
   // solapamiento horario
   const haySolape = inscriptosDia.some(
@@ -79,6 +88,8 @@ export function textoMotivo(m: MotivoBloqueo): string {
       return "Se superpone con otro taller ese día";
     case "mismacategoria":
       return "Ya tenés un taller de esa categoría ese día";
+    case "mismotallersemana":
+      return "Ya estás anotado a este taller esta semana";
     case "yainscripto":
       return "Ya estás inscripto";
     case "noabierto":

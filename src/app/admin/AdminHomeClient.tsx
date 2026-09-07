@@ -7,6 +7,7 @@ import {
   actualizarConfigAction,
   toggleTallerActivoAction,
   eliminarTallerAction,
+  asignarPendientesAction,
 } from "./actions";
 import { TallerForm } from "./TallerForm";
 import { CategoriaManager } from "./CategoriaManager";
@@ -199,6 +200,11 @@ function TalleresTab({
                     <span>
                       {cupoActual}/{t.cupo_max} cupos
                     </span>
+                    {!t.requiere_materiales && (
+                      <span className="badge bg-amber-100 text-amber-700">
+                        🥫 pide alimento
+                      </span>
+                    )}
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -276,6 +282,11 @@ function TalleresTab({
                           <span className="badge bg-slate-100 text-slate-600">
                             {t.categoria}
                           </span>
+                          {!t.requiere_materiales && (
+                            <span className="badge ml-1 bg-amber-100 text-amber-700">
+                              🥫
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-slate-600">
                           {cupoActual}/{t.cupo_max}
@@ -399,6 +410,56 @@ function ConfigTab({
       </div>
       <button onClick={guardar} disabled={saving} className="btn-primary mt-4 w-full sm:w-auto">
         {saving ? "Guardando…" : "Guardar"}
+      </button>
+
+      <AsignarPendientes onMsg={onMsg} />
+    </div>
+  );
+}
+
+// ---------- asignación automática de alumnos sin taller ----------
+function AsignarPendientes({
+  onMsg,
+}: {
+  onMsg: (m: { ok: boolean; texto: string }) => void;
+}) {
+  const [asignando, setAsignando] = useState(false);
+
+  async function handleAsignar() {
+    const ok = confirm(
+      "Esto va a anotar automáticamente, en un taller al azar con cupo disponible, a todos los alumnos que todavía no tengan ninguna inscripción. ¿Continuar?",
+    );
+    if (!ok) return;
+    setAsignando(true);
+    const res = await asignarPendientesAction();
+    setAsignando(false);
+    if (!res.ok) {
+      onMsg({ ok: false, texto: res.error ?? "Error al asignar." });
+      return;
+    }
+    const partes = [`${res.asignados ?? 0} alumno(s) asignado(s) al azar.`];
+    if (res.sinCupo) {
+      partes.push(`${res.sinCupo} sin taller (no quedaba cupo en ninguno).`);
+    }
+    onMsg({ ok: true, texto: partes.join(" ") });
+  }
+
+  return (
+    <div className="mt-6 border-t border-slate-200 pt-4">
+      <h3 className="text-sm font-semibold text-slate-800">
+        Alumnos sin ningún taller
+      </h3>
+      <p className="mt-1 text-sm text-slate-600">
+        Anota automáticamente, al azar y en un taller con cupo disponible, a
+        los alumnos que no se hayan inscripto a nada. Pensado para correr una
+        sola vez, cerca del cierre de inscripciones.
+      </p>
+      <button
+        onClick={handleAsignar}
+        disabled={asignando}
+        className="btn-secondary mt-3 w-full sm:w-auto"
+      >
+        {asignando ? "Asignando…" : "Asignar alumnos sin taller"}
       </button>
     </div>
   );

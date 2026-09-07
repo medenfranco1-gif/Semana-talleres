@@ -30,6 +30,8 @@ export interface Taller {
   hora_fin: string; // "HH:MM:SS"
   cupo_max: number;
   activo: boolean;
+  // false = no requiere comprar materiales -> se pide alimento no perecedero
+  requiere_materiales: boolean;
   created_at: string;
   updated_at: string;
   // campo calculado opcional (cupos)

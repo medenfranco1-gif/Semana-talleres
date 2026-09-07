@@ -119,8 +119,11 @@ export function CatalogoClient({
   // título del taller antes de disparar la inscripción real.
   const handleInscribirConConfirmacion = useCallback(
     (taller: Taller) => {
+      const avisoAlimento = !taller.requiere_materiales
+        ? "\n\nEste taller no requiere comprar materiales: traé un alimento no perecedero como colaboración."
+        : "";
       const ok = window.confirm(
-        `¿Seguro querés inscribirte a "${taller.titulo}"?`,
+        `¿Seguro querés inscribirte a "${taller.titulo}"?${avisoAlimento}`,
       );
       if (!ok) return;
       handleInscribir(taller.id);
@@ -331,6 +334,13 @@ function TallerCard({
       <div className="mt-2 text-sm text-slate-600">
         {taller.profesor && <div>Profesor: {taller.profesor}</div>}
       </div>
+
+      {!taller.requiere_materiales && (
+        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+          🥫 Este taller no requiere comprar materiales: traé un{" "}
+          <strong>alimento no perecedero</strong> como colaboración.
+        </div>
+      )}
 
       <div className="mt-3 flex items-center justify-between">
         <span

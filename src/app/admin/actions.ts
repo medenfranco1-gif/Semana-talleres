@@ -35,6 +35,7 @@ export async function crearTallerAction(data: Omit<Taller, "id" | "created_at" |
     hora_fin: data.hora_fin,
     cupo_max: data.cupo_max,
     activo: data.activo ?? true,
+    requiere_materiales: data.requiere_materiales ?? true,
   });
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
@@ -61,6 +62,7 @@ export async function actualizarTallerAction(
       hora_fin: data.hora_fin,
       cupo_max: data.cupo_max,
       activo: data.activo,
+      requiere_materiales: data.requiere_materiales,
     })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
@@ -90,6 +92,34 @@ export async function toggleTallerActivoAction(
   revalidatePath("/admin");
   revalidatePath("/catalogo");
   return { ok: true };
+}
+
+/**
+ * Asigna al azar un taller con cupo disponible a cada alumno que todavía no
+ * tenga ninguna inscripción. Llama al RPC `asignar_talleres_pendientes`
+ * (security definer), que revalida es_admin() por su cuenta y reutiliza el
+ * INSERT normal para pasar siempre por el trigger de validación.
+ * Pensada para correrse una sola vez, cerca del cierre de inscripciones.
+ */
+export async function asignarPendientesAction(): Promise<{
+  ok: boolean;
+  error?: string;
+  asignados?: number;
+  sinCupo?: number;
+}> {
+  await requireAdmin();
+  const supabase = createServerSupaClient();
+  const { data, error } = await supabase.rpc("asignar_talleres_pendientes");
+  if (error) return { ok: false, error: error.message };
+
+  const filas = (data ?? []) as { alumno_id: string; taller_id: string | null; error: string | null }[];
+  const asignados = filas.filter((f) => f.taller_id).length;
+  const sinCupo = filas.filter((f) => !f.taller_id).length;
+
+  revalidatePath("/admin");
+  revalidatePath("/catalogo");
+  revalidatePath("/mi-itinerario");
+  return { ok: true, asignados, sinCupo };
 }
 
 // ---------------- CONFIGURACIÓN ----------------

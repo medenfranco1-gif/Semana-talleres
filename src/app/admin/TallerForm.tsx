@@ -32,6 +32,9 @@ export function TallerForm({
   const [horaFin, setHoraFin] = useState(taller?.hora_fin ?? "10:30");
   const [cupoMax, setCupoMax] = useState(taller?.cupo_max ?? 25);
   const [activo, setActivo] = useState(taller?.activo ?? true);
+  const [requiereMateriales, setRequiereMateriales] = useState(
+    taller?.requiere_materiales ?? true,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -64,6 +67,7 @@ export function TallerForm({
       hora_fin: horaFin,
       cupo_max: cupoMax,
       activo,
+      requiere_materiales: requiereMateriales,
     };
 
     let res: { ok: boolean; error?: string };
@@ -159,6 +163,23 @@ export function TallerForm({
         <input type="checkbox" checked={activo} onChange={(e) => setActivo(e.target.checked)} />
         <span className="text-sm text-slate-700">Taller activo (visible para inscripción)</span>
       </label>
+
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={requiereMateriales}
+          onChange={(e) => setRequiereMateriales(e.target.checked)}
+        />
+        <span className="text-sm text-slate-700">
+          Requiere que el alumno compre materiales
+        </span>
+      </label>
+      {!requiereMateriales && (
+        <p className="-mt-2 text-xs text-amber-600">
+          Al desmarcar esto, el catálogo le va a pedir al alumno traer un
+          alimento no perecedero como colaboración para este taller.
+        </p>
+      )}
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
