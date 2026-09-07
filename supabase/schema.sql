@@ -62,13 +62,17 @@ create table if not exists public.talleres (
 );
 
 comment on table public.talleres is 'Talleres del evento. dia=1..3. cupos controlados por trigger.';
-comment on column public.talleres.requiere_materiales is 'Si es false, el taller no requiere que el alumno compre materiales; en ese caso se pide traer un alimento no perecedero como colaboración.';
 
 -- Migración defensiva: si la tabla ya existía de antes (deploy previo sin esta
 -- columna), la agregamos sin romper nada. `create table if not exists` de
 -- arriba no toca tablas ya creadas, así que este ALTER cubre ese caso.
+-- Va ANTES del `comment on column` de abajo: ese comentario necesita que la
+-- columna ya exista, y en una tabla preexistente el `create table if not
+-- exists` de arriba no la crea.
 alter table public.talleres
   add column if not exists requiere_materiales boolean not null default true;
+
+comment on column public.talleres.requiere_materiales is 'Si es false, el taller no requiere que el alumno compre materiales; en ese caso se pide traer un alimento no perecedero como colaboración.';
 
 -- inscripciones: relación alumno ↔ taller
 create table if not exists public.inscripciones (
