@@ -7,6 +7,7 @@ export type MotivoBloqueo =
   | { tipo: "mismacategoria" }
   | { tipo: "yainscripto" }
   | { tipo: "mismotallersemana" }
+  | { tipo: "limitecatssemana"; categoria: string }
   | { tipo: "noabierto" }
   | null;
 
@@ -73,7 +74,23 @@ export function evaluarBloqueoCliente(
   );
   if (haySolape) return { tipo: "solapamiento" };
 
-  // misma categoría
+  // LÍMITE SEMANAL POR CATEGORÍA: máx 2 de Cocina y 2 de Deportes en toda la
+  // semana (suma los 3 días). Espeja el chequeo del trigger backend
+  // `alumno_count_categoria_semana`. Si el alumno ya tiene 2 de la categoría
+  // y el taller nuevo es de esa categoría, se bloquea (aunque sea otro día).
+  // Importante: este límite es por SEMANA, no por día; por eso contamos sobre
+  // `inscriptos` (todos los días) y no sobre `inscriptosDia`.
+  const catNorm = taller.categoria.trim().toLowerCase();
+  if (catNorm === "cocina" || catNorm === "deportes") {
+    const count = inscriptos.filter(
+      (t) => t.categoria.trim().toLowerCase() === catNorm,
+    ).length;
+    if (count >= 2) {
+      return { tipo: "limitecatssemana", categoria: taller.categoria };
+    }
+  }
+
+  // misma categoría ese día (no repetir categoría en un mismo día)
   const mismaCat = inscriptosDia.some((t) => t.categoria === taller.categoria);
   if (mismaCat) return { tipo: "mismacategoria" };
 
@@ -90,6 +107,8 @@ export function textoMotivo(m: MotivoBloqueo): string {
       return "Ya tenés un taller de esa categoría ese día";
     case "mismotallersemana":
       return "Ya estás anotado a este taller esta semana";
+    case "limitecatssemana":
+      return `Alcanzaste el máximo de 2 talleres de ${m?.categoria ?? "esa categoría"} en la semana`;
     case "yainscripto":
       return "Ya estás inscripto";
     case "noabierto":

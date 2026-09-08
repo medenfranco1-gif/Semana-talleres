@@ -267,6 +267,9 @@ function traducirErrorCambio(msg: string): string {
   if (m.includes("no está disponible")) {
     return "El taller nuevo no está disponible.";
   }
+  if (m.includes("límite alcanzado") && (m.includes("cocina") || m.includes("deportes"))) {
+    return "El alumno ya tiene 2 talleres de esa categoría en la semana.";
+  }
   if (m.includes("inscripciones están cerradas")) {
     return "Las inscripciones están cerradas. Habilitálas antes de cambiar.";
   }

@@ -158,6 +158,15 @@ export function CatalogoClient({
         ? config.inscripciones_abiertas_dia2
         : config.inscripciones_abiertas_dia3);
 
+  // ¿Hay algún taller en el catálogo que NO requiera materiales? Solo en ese
+  // caso mostramos el banner del alimento no perecedero (si todos piden
+  // materiales, el aviso no aplica y no ensucia la pantalla). Fran pidió que
+  // el aviso aparezca al entrar al catálogo, no solo dentro de cada tarjeta.
+  const hayTalleresSinMateriales = useMemo(
+    () => talleres.some((t) => !t.requiere_materiales),
+    [talleres],
+  );
+
   return (
     <div>
       <div className="mb-6">
@@ -167,6 +176,24 @@ export function CatalogoClient({
           confirman recién al presionar “Inscribirme”.
         </p>
       </div>
+
+      {/* Aviso de alimento no perecedero: aparece al entrar al catálogo. */}
+      {hayTalleresSinMateriales && (
+        <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="flex items-start gap-2">
+            <span className="text-lg leading-none">🥫</span>
+            <div>
+              <p className="font-semibold">Llevar alimento no perecedero</p>
+              <p className="mt-0.5 text-amber-800">
+                Algunos talleres marcados con 🥫 <strong>no requieren que
+                compres materiales</strong>: como colaboración, tenés que llevar
+                un alimento no perecedero (fideos, arroz, legumbres, leche
+                larga vida, etc.). Fijate en cada tarjeta cuál lo pide.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* selector de día */}
       <div className="mb-4 flex flex-wrap gap-2">

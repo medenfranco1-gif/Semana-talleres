@@ -98,6 +98,9 @@ function traducirErrorInscripcion(msg: string): string {
   if (m.includes("categoría") && m.includes("día")) {
     return "Ya tenés un taller de la misma categoría ese día.";
   }
+  if (m.includes("límite alcanzado") && (m.includes("cocina") || m.includes("deportes"))) {
+    return "Ya tenés 2 talleres de esa categoría anotados en la semana.";
+  }
   if (m.includes("no está disponible")) {
     return "Este taller no está disponible para inscripción.";
   }

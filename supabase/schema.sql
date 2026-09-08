@@ -242,6 +242,27 @@ begin
 end;
 $$;
 
+-- 2c-ter) helper: cantidad de talleres de una categoría dada que el alumno ya
+-- tiene inscriptos en TODA la semana (suma los 3 días). Pensado para el límite
+-- semanal de "máximo 2 de Cocina y 2 de Deportes", que es independiente del
+-- día: cuenta también talleres de la misma categoría inscriptos en otros días.
+-- No excluye el taller actual porque esta función se consulta ANTES del
+-- INSERT (solo sobre inscripciones preexistentes), así que el taller nuevo
+-- todavía no figura en el count.
+create or replace function public.alumno_count_categoria_semana(
+  p_alumno_id uuid,
+  p_categoria text
+) returns integer
+language sql
+stable
+as $$
+  select count(*)::integer
+  from public.inscripciones i
+  join public.talleres t on t.id = i.taller_id
+  where i.alumno_id = p_alumno_id
+    and lower(btrim(t.categoria)) = lower(btrim(p_categoria));
+$$;
+
 -- 2d) handler: trigger BEFORE INSERT en inscripciones — valida todas las reglas
 -- CONCURRENCIA: dos INSERTs simultáneos (al mismo taller, o del mismo alumno
 -- a talleres incompatibles) podrían pasar los chequeos a la vez. Para evitarlo
@@ -312,6 +333,22 @@ begin
   -- 4bis) mismo taller repetido en otro día de la semana
   if public.alumno_tiene_taller_en_semana(new.alumno_id, new.taller_id) then
     raise exception 'Ya estás anotado a este taller en otro día de la semana.';
+  end if;
+
+  -- 4ter) LÍMITE SEMANAL POR CATEGORÍA: máximo 2 talleres de Cocina y 2 de
+  -- Deportes en toda la semana (suma los 3 días, sin importar el día del
+  -- taller nuevo). Para el resto de categorías no hay tope semanal: solo
+  -- rigen las reglas por día (no repetir categoría ese día) y por semana
+  -- (no repetir el mismo taller). Esto cubre el pedido de "2 de cocina y
+  -- 2 de deportes por semana". Si el alumno ya tiene 2 de la categoría y
+  -- quiere un tercero, se rechaza acá.
+  if lower(btrim(v_taller.categoria)) = 'cocina'
+     and public.alumno_count_categoria_semana(new.alumno_id, 'cocina') >= 2 then
+    raise exception 'Ya tenés 2 talleres de Cocina anotados en la semana (límite alcanzado).';
+  end if;
+  if lower(btrim(v_taller.categoria)) = 'deportes'
+     and public.alumno_count_categoria_semana(new.alumno_id, 'deportes') >= 2 then
+    raise exception 'Ya tenés 2 talleres de Deportes anotados en la semana (límite alcanzado).';
   end if;
 
   -- 5) inscripciones abiertas (global + día)
