@@ -7,11 +7,12 @@ export const metadata = { title: "Ingresar · Escuela Leonardo Da Vinci" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: { redirect?: string; registrado?: string; reset?: string };
+  searchParams: { redirect?: string; registrado?: string; reset?: string; error?: string };
 }) {
   const redirect = searchParams.redirect || "/catalogo";
   const registrado = searchParams.registrado === "1";
   const reset = searchParams.reset === "1";
+  const linkInvalido = searchParams.error === "invalid_link";
 
   return (
     <div className="container-app py-10">
@@ -22,6 +23,13 @@ export default async function LoginPage({
             Usá el email y contraseña de tu cuenta.
           </p>
         </div>
+
+        {linkInvalido && (
+          <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            El link de recuperación no es válido o ya fue usado. Pedí uno nuevo
+            desde la opción “¿Olvidaste tu contraseña?”.
+          </div>
+        )}
 
         {reset && (
           <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
