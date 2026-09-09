@@ -3,56 +3,103 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import type { Alumno } from "@/lib/types";
+
+const PROFILE_REQUEST_TIMEOUT_MS = 5_000;
+
+/**
+ * Resuelve una operación o la rechaza si el servicio remoto no responde a
+ * tiempo. Evita que la barra de navegación quede en estado de carga infinito.
+ */
+function withTimeout<T>(operation: PromiseLike<T>, milliseconds: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error("La consulta de sesión excedió el tiempo límite."));
+    }, milliseconds);
+
+    Promise.resolve(operation).then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 /**
  * Barra de navegación. Muestra acciones según sesión/rol.
  * Recarga el perfil cuando cambia la sesión: ya sea por onAuthStateChange
  * (login/logout hechos desde el cliente) o por nuestro evento "auth-changed"
  * (login/registro hechos desde server actions, que no disparan el callback de
- * Supabase en el navegador).
+ * Supabase).
  */
 export function Navbar() {
-  const supabase = createClient();
+  // El cliente debe ser estable: crear uno nuevo en cada render hacía que el
+  // useEffect se re-suscribiera y disparara consultas de forma indefinida.
+  const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const pathname = usePathname();
   const [alumno, setAlumno] = useState<Alumno | null>(null);
   const [loading, setLoading] = useState(true);
+  const needsProfile = ["/catalogo", "/mi-itinerario", "/admin"].some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
 
-  // Carga el perfil del usuario actual desde el cliente (cookies SSR).
-  const cargarPerfil = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+  // Carga el perfil solo en áreas que lo necesitan. La navbar está en el
+  // layout global, pero las páginas públicas no deben consultar Supabase.
+  const cargarPerfil = async (): Promise<void> => {
+    try {
+      const {
+        data: { user },
+      } = await withTimeout(supabase.auth.getUser(), PROFILE_REQUEST_TIMEOUT_MS);
+      if (!user) {
+        setAlumno(null);
+        return;
+      }
+
+      const { data } = await withTimeout(
+        supabase
+          .from("alumnos")
+          .select("*")
+          .eq("auth_user_id", user.id)
+          .single(),
+        PROFILE_REQUEST_TIMEOUT_MS,
+      );
+      setAlumno(data as Alumno | null);
+    } catch {
+      // La navbar es auxiliar: si Supabase está temporalmente lento, no debe
+      // bloquear ni dejar ocultos los enlaces públicos.
+      setAlumno(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!needsProfile) {
       setAlumno(null);
       setLoading(false);
       return;
     }
-    const { data } = await supabase
-      .from("alumnos")
-      .select("*")
-      .eq("auth_user_id", user.id)
-      .single();
-    setAlumno(data as Alumno | null);
-    setLoading(false);
-  };
 
-  useEffect(() => {
-    cargarPerfil();
+    void cargarPerfil();
 
     // Cambios de auth desde el cliente (ej. logout acá mismo).
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      cargarPerfil();
+      void cargarPerfil();
       router.refresh();
     });
 
     // Cambios de auth desde server actions (login/registro). Esos NO disparan
     // onAuthStateChange, así que usamos un evento propio.
     const onAuthChanged = () => {
-      cargarPerfil();
+      void cargarPerfil();
       router.refresh();
     };
     window.addEventListener("auth-changed", onAuthChanged);
@@ -61,8 +108,7 @@ export function Navbar() {
       sub.subscription.unsubscribe();
       window.removeEventListener("auth-changed", onAuthChanged);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, router]);
+  }, [needsProfile, supabase, router]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
