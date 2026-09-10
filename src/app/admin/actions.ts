@@ -350,3 +350,37 @@ function generarPassword(largo: number): string {
   }
   return out;
 }
+
+// ---------------- BORRAR ALUMNO ----------------
+
+/**
+ * Borra un alumno completamente: elimina su cuenta de auth.users (lo que también
+ * borra su fila en alumnos y todas sus inscripciones gracias al ON DELETE CASCADE).
+ * Solo admin.
+ */
+export async function adminBorrarAlumnoAction(
+  alumnoId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  const admin = createAdminClient();
+
+  // 1) obtener el auth_user_id del alumno
+  const { data: al, error: eAl } = await admin
+    .from("alumnos")
+    .select("auth_user_id, email, nombre, apellido")
+    .eq("id", alumnoId)
+    .single();
+  if (eAl || !al) {
+    return { ok: false, error: "No se encontró el alumno." };
+  }
+
+  // 2) borrar el usuario de auth.users (esto cascadea a alumnos e inscripciones)
+  const { error: eDel } = await admin.auth.admin.deleteUser(al.auth_user_id);
+  if (eDel) {
+    return { ok: false, error: eDel.message };
+  }
+
+  revalidatePath("/admin/alumnos");
+  revalidatePath("/admin");
+  return { ok: true };
+}

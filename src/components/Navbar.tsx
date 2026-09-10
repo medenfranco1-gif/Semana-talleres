@@ -46,6 +46,7 @@ export function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const [alumno, setAlumno] = useState<Alumno | null>(null);
+  const [cargando, setCargando] = useState(true);
   const inflight = useRef<Promise<void> | null>(null);
 
   // Carga el perfil del usuario actual. Si ya hay una carga en curso, espera
@@ -60,6 +61,7 @@ export function Navbar() {
         } = await withTimeout(supabase.auth.getUser(), PROFILE_REQUEST_TIMEOUT_MS);
         if (!user) {
           setAlumno(null);
+          setCargando(false);
           return;
         }
         const { data } = await withTimeout(
@@ -71,8 +73,10 @@ export function Navbar() {
           PROFILE_REQUEST_TIMEOUT_MS,
         );
         setAlumno(data as Alumno | null);
+        setCargando(false);
       } catch {
         setAlumno(null);
+        setCargando(false);
       }
     };
 
@@ -163,7 +167,7 @@ export function Navbar() {
 
           {/* Enlaces públicos visibles desde el primer render. No dependen de
               que Supabase termine de cargar. */}
-          {!alumno && (
+          {!cargando && !alumno && (
             <>
               <Link href="/login" className={linkCls("/login")}>
                 Ingresar

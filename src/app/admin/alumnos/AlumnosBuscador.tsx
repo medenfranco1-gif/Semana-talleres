@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DIAS, fmtRango } from "@/lib/format";
 import type { Alumno, InscripcionConTaller, Taller } from "@/lib/types";
-import { adminDarBajaAction, adminCambiarTallerAction, adminResetPasswordAction } from "../actions";
+import { adminDarBajaAction, adminCambiarTallerAction, adminResetPasswordAction, adminBorrarAlumnoAction } from "../actions";
 
 type AlumnoConIns = Alumno & { inscripciones: InscripcionConTaller[] };
 
@@ -119,6 +119,28 @@ export function AlumnosBuscador({ alumnos, talleresMap, talleres }: Props) {
     setResetProcesando((p) => { const n = new Set(p); n.delete(a.id); return n; });
   }
 
+  // Borrar alumno: borra completamente la cuenta del alumno (auth.users + alumnos + inscripciones)
+  const [borrarProcesando, setBorrarProcesando] = useState<Set<string>>(new Set());
+
+  async function handleBorrarAlumno(a: AlumnoConIns) {
+    const ok = window.confirm(
+      `¿BORRAR completamente a ${a.nombre} ${a.apellido}? Se va a eliminar su cuenta y todas sus inscripciones. Esta acción NO se puede deshacer.`,
+    );
+    if (!ok) return;
+    setBorrarProcesando((p) => new Set(p).add(a.id));
+    setResetResultado((r) => { const n = { ...r }; delete n[a.id]; return n; });
+    const res = await adminBorrarAlumnoAction(a.id);
+    if (res.ok) {
+      router.refresh();
+    } else {
+      setResetResultado((r) => ({
+        ...r,
+        [a.id]: { ok: false, msg: res.error ?? "Error al borrar." },
+      }));
+      setBorrarProcesando((p) => { const n = new Set(p); n.delete(a.id); return n; });
+    }
+  }
+
   return (
     <div>
       <input
@@ -177,6 +199,13 @@ export function AlumnosBuscador({ alumnos, talleresMap, talleres }: Props) {
                           className="btn-secondary px-2 py-1 text-xs"
                         >
                           {resetProcesando.has(a.id) ? "Reseteando…" : "Resetear contraseña"}
+                        </button>
+                        <button
+                          onClick={() => handleBorrarAlumno(a)}
+                          disabled={borrarProcesando.has(a.id)}
+                          className="btn-secondary px-2 py-1 text-xs bg-red-50 text-red-700 hover:bg-red-100"
+                        >
+                          {borrarProcesando.has(a.id) ? "Borrando…" : "Borrar alumno"}
                         </button>
                         <a
                           href={`/admin/export/alumno/${a.id}?format=pdf`}
