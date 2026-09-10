@@ -6,7 +6,8 @@ import type { Taller, Categoria, Configuracion, Inscripcion } from "@/lib/types"
 
 export const metadata = { title: "Catálogo · Semana de Talleres" };
 
-// Forzar revalidación en cada request para mostrar cupos actualizados
+// Forzar renderizado dinámico sin cache
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function CatalogoPage() {
