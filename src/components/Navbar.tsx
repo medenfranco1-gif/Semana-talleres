@@ -48,10 +48,6 @@ export function Navbar() {
   const [alumno, setAlumno] = useState<Alumno | null>(null);
   const inflight = useRef<Promise<void> | null>(null);
 
-  const needsProfile = ["/catalogo", "/mi-itinerario", "/admin"].some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`),
-  );
-
   // Carga el perfil del usuario actual. Si ya hay una carga en curso, espera
   // esa en vez de abrir otra petición paralela.
   const cargarPerfil = useCallback(async (): Promise<void> => {
@@ -87,11 +83,9 @@ export function Navbar() {
   }, [supabase]);
 
   useEffect(() => {
-    if (!needsProfile) {
-      setAlumno(null);
-      return;
-    }
-
+    // La navbar vive en el layout global: debe conservar el perfil también en
+    // rutas públicas como `/faq`. Solo hacemos una carga acotada por montaje,
+    // y la deduplicación evita consultas paralelas.
     void cargarPerfil();
 
     // Solo reaccionamos a logout/signOut del cliente. Los demás eventos
@@ -116,7 +110,7 @@ export function Navbar() {
       sub.subscription.unsubscribe();
       window.removeEventListener("auth-changed", onAuthChanged);
     };
-  }, [needsProfile, supabase, cargarPerfil]);
+  }, [supabase, cargarPerfil]);
 
   async function handleLogout() {
     setAlumno(null);
