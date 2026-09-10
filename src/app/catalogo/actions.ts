@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupaClient } from "@/lib/supabase-server";
 import { getAlumnoActual } from "@/lib/session";
+import { puedeInscribirsePorFranja } from "@/lib/franjas-inscripcion";
 import type { ResultadoInscripcion } from "@/lib/types";
 
 /**
@@ -15,6 +16,9 @@ import type { ResultadoInscripcion } from "@/lib/types";
  * OPTIMIZACIÓN: eliminamos el SELECT previo para verificar si ya está inscripto,
  * porque la base ya tiene UNIQUE (alumno_id, taller_id). Hacemos el INSERT
  * directamente y traducimos el error de unique violation a mensaje amigable.
+ *
+ * FRANJAS HORARIAS: Para talleres del miércoles, validamos que la inscripción
+ * esté dentro de la franja horaria permitida antes de ejecutar el INSERT.
  */
 export async function inscribirAction(
   tallerId: string,
@@ -28,6 +32,57 @@ export async function inscribirAction(
   }
 
   const supabase = createServerSupaClient();
+
+  // VALIDACIÓN DE FRANJAS: Obtener el taller para verificar su franja horaria
+  const { data: taller, error: errorTaller } = await supabase
+    .from("talleres")
+    .select("*")
+    .eq("id", tallerId)
+    .single();
+
+  if (errorTaller || !taller) {
+    console.log(`[inscripcion] taller_no_encontrado duracion=${Date.now() - startTime}ms`);
+    return { ok: false, mensaje: "El taller no existe.", taller_id: tallerId };
+  }
+
+  // Verificar franja horaria (solo para miércoles)
+  if (!puedeInscribirsePorFranja(taller)) {
+    const duration = Date.now() - startTime;
+    console.log(`[inscripcion] fuera_de_franja duracion=${duration}ms dia=${taller.dia} hora=${taller.hora_inicio}`);
+
+    // Determinar mensaje específico según el estado
+    if (taller.dia === 3) { // miércoles
+      const ahora = new Date();
+      const horaArgentina = ahora.toLocaleString("en-US", {
+        timeZone: "America/Argentina/Buenos_Aires",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+
+      // Si es antes de las 20:00 o después de las 20:30
+      if (horaArgentina < "20:00") {
+        return {
+          ok: false,
+          mensaje: "Este taller todavía no está habilitado en esta franja de inscripción.",
+          taller_id: tallerId,
+        };
+      } else {
+        return {
+          ok: false,
+          mensaje: "La franja de inscripción para este taller ya finalizó.",
+          taller_id: tallerId,
+        };
+      }
+    }
+
+    // Caso genérico (taller fuera de franjas definidas)
+    return {
+      ok: false,
+      mensaje: "Este taller no tiene franja de inscripción asignada.",
+      taller_id: tallerId,
+    };
+  }
 
   // INSERT directo: la BD rechaza duplicados con UNIQUE constraint
   const { error } = await supabase.from("inscripciones").insert({
@@ -54,7 +109,9 @@ export async function inscribirAction(
 
   console.log(`[inscripcion] ok duracion=${duration}ms`);
 
-  // Revalidar solo /mi-itinerario, no /catalogo (el catálogo ya no hace refresh)
+  // Revalidar solo /mi-itinerario para que muestre la inscripción nueva.
+  // NO revalidamos /catalogo porque CatalogoClient hace optimistic update local
+  // y no necesita refetch del servidor.
   revalidatePath("/mi-itinerario");
   return {
     ok: true,
@@ -85,6 +142,11 @@ export async function desinscribirAction(
     return { ok: false, mensaje: "No se pudo dar de baja la inscripción." };
   }
 
+  // Revalidar ambas rutas porque la desinscripción debe reflejarse en:
+  // - /mi-itinerario: para actualizar la lista de inscripciones
+  // - /catalogo: para liberar el cupo y permitir que se inscriba de nuevo
+  // Nota: esto NO causa refetch en /catalogo si el usuario está ahí,
+  // solo invalida el cache para la próxima navegación.
   revalidatePath("/catalogo");
   revalidatePath("/mi-itinerario");
   return { ok: true, mensaje: "Te diste de baja del taller." };
