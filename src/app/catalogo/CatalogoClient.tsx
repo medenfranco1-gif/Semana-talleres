@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { DIAS, fmtRango } from "@/lib/format";
 import {
   evaluarBloqueoCliente,
@@ -36,9 +35,9 @@ type FiltroCat = string | "todas";
  *  - Los cupos se cargan como un snapshot inicial (Server Component).
  *  - El cupo *real* lo decide el trigger `validar_inscripcion` en la BD
  *    al momento del INSERT, con bloqueo `FOR UPDATE` (no se saltea).
- *  - Tras una inscripción exitosa, refrescamos la página con
- *    `router.refresh()`, que reejecuta el Server Component y trae cupos
- *    e inscripciones actualizados, sin mantener una conexión persistente.
+ *  - Tras una inscripción exitosa, actualizamos el estado local de
+ *    inscripciones optimistamente (sin recargar toda la página), lo que
+ *    reduce drásticamente la carga en Supabase durante picos de tráfico.
  */
 export function CatalogoClient({
   talleres: talleresInit,
@@ -49,8 +48,8 @@ export function CatalogoClient({
 }: Props) {
   // Estado local inicializado desde el snapshot del Server Component.
   // No hay suscripción a Realtime: el estado cambia solo cuando el usuario
-  // interactúa o tras `router.refresh()`.
-  const router = useRouter();
+  // interactúa. No se hace router.refresh() para evitar recargar todo el
+  // catálogo (talleres, categorías, config, cupos) innecesariamente.
   const [talleres] = useState<Taller[]>(talleresInit);
   const [config] = useState<Configuracion | null>(configInit);
   const [inscripciones, setInscripciones] = useState<Inscripcion[]>(inscripcionesInit);
@@ -73,10 +72,14 @@ export function CatalogoClient({
   );
 
   // ---------- INSCRIPCIÓN ----------
-  // Sin Realtime: tras una inscripción exitosa pedimos al Server Component
-  // que se vuelva a renderizar (router.refresh), lo que trae cupos e
-  // inscripciones frescos desde la BD. Es un pedido por demanda, no una
-  // conexión persistente, así no consume conexiones del plan gratuito.
+  // Sin router.refresh(): tras una inscripción exitosa, solo actualizamos el
+  // estado local de inscripciones. Esto evita recargar todo el catálogo
+  // (talleres, categorías, config, cupos, getUser de Auth) desde el servidor,
+  // reduciendo drásticamente la carga en Supabase durante inscripciones masivas.
+  // El cupo mostrado puede quedar desactualizado, pero el trigger de la BD
+  // siempre valida el cupo real con FOR UPDATE, así que la integridad está
+  // garantizada. Si el alumno recarga la página manualmente, verá el estado
+  // actualizado desde el servidor.
   const handleInscribir = useCallback(
     async (tallerId: string) => {
       setProcesando((p) => new Set(p).add(tallerId));
@@ -84,12 +87,8 @@ export function CatalogoClient({
         const res = await inscribirAction(tallerId);
         setResultados((r) => ({ ...r, [tallerId]: res }));
         if (res.ok) {
-          // Refresco server-side: el Server Component vuelve a consultar
-          // cupos e inscripciones. (Equivalente a lo que haría Realtime,
-          // pero por demanda y sin conexión persistente.)
-          router.refresh();
-          // Optimista local: marcamos el taller como inscripto para que el
-          // botón cambie de inmediato antes de que llegue el refresh.
+          // Actualización optimista local: marcamos el taller como inscripto
+          // para que el botón cambie de inmediato, sin recargar desde servidor.
           setInscripciones((prev) => {
             if (prev.some((i) => i.taller_id === tallerId)) return prev;
             return [
@@ -112,7 +111,7 @@ export function CatalogoClient({
         });
       }
     },
-    [alumnoId, router],
+    [alumnoId],
   );
 
   // Wrapper con confirmación previa: muestra un diálogo "¿seguro?" con el

@@ -178,7 +178,25 @@ export interface Database {
       };
     };
     Views: { [key: string]: never };
-    Functions: { [key: string]: never };
+    Functions: {
+      contar_cupos_talleres: {
+        Args: {
+          p_taller_ids: string[];
+        };
+        Returns: {
+          taller_id: string;
+          cantidad: number;
+        }[];
+      };
+      asignar_talleres_pendientes: {
+        Args: Record<string, never>;
+        Returns: {
+          alumno_id: string;
+          taller_id: string | null;
+          error: string | null;
+        }[];
+      };
+    };
     Enums: { [key: string]: never };
     CompositeTypes: { [key: string]: never };
   };

@@ -11,35 +11,40 @@ import type { ResultadoInscripcion } from "@/lib/types";
  * abiertas) la hace el trigger backend `validar_inscripcion` en la BD, así que
  * NO se puede saltear desde el frontend. Acá solo capturamos el error y lo
  * devolvemos legible.
+ *
+ * OPTIMIZACIÓN: eliminamos el SELECT previo para verificar si ya está inscripto,
+ * porque la base ya tiene UNIQUE (alumno_id, taller_id). Hacemos el INSERT
+ * directamente y traducimos el error de unique violation a mensaje amigable.
  */
 export async function inscribirAction(
   tallerId: string,
 ): Promise<ResultadoInscripcion> {
+  const startTime = Date.now();
+
   const alumno = await getAlumnoActual();
   if (!alumno) {
+    console.log(`[inscripcion] sin_auth duracion=${Date.now() - startTime}ms`);
     return { ok: false, mensaje: "Tenés que iniciar sesión para inscribirte." };
   }
 
   const supabase = createServerSupaClient();
 
-  // doble inscripción idempotente: chequear si ya está inscripto
-  const { data: existente } = await supabase
-    .from("inscripciones")
-    .select("id")
-    .eq("alumno_id", alumno.id)
-    .eq("taller_id", tallerId)
-    .maybeSingle();
-
-  if (existente) {
-    return { ok: false, mensaje: "Ya estás inscripto en este taller.", taller_id: tallerId };
-  }
-
+  // INSERT directo: la BD rechaza duplicados con UNIQUE constraint
   const { error } = await supabase.from("inscripciones").insert({
     alumno_id: alumno.id,
     taller_id: tallerId,
   });
 
+  const duration = Date.now() - startTime;
+
   if (error) {
+    // Traducir unique violation (código 23505) a mensaje amigable
+    if (error.code === "23505") {
+      console.log(`[inscripcion] duplicado duracion=${duration}ms code=${error.code}`);
+      return { ok: false, mensaje: "Ya estás inscripto en este taller.", taller_id: tallerId };
+    }
+
+    console.log(`[inscripcion] error duracion=${duration}ms code=${error.code || 'unknown'}`);
     return {
       ok: false,
       mensaje: traducirErrorInscripcion(error.message),
@@ -47,7 +52,9 @@ export async function inscribirAction(
     };
   }
 
-  revalidatePath("/catalogo");
+  console.log(`[inscripcion] ok duracion=${duration}ms`);
+
+  // Revalidar solo /mi-itinerario, no /catalogo (el catálogo ya no hace refresh)
   revalidatePath("/mi-itinerario");
   return {
     ok: true,

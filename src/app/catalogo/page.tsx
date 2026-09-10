@@ -28,21 +28,24 @@ export default async function CatalogoPage() {
     supabase.from("inscripciones").select("*").eq("alumno_id", alumno.id),
   ]);
 
-  // conteo de cupos por taller (server). Es un snapshot inicial informativo:
-  // el cupo DEFINITIVO lo decide el trigger `validar_inscripcion` en la BD al
-  // momento del INSERT (con FOR UPDATE), por lo que el número acá puede estar
-  // ligeramente desactualizado si muchos inscriben a la vez. Por eso la UI
-  // aclara que el cupo "se confirma al presionar Inscribirme".
+  // conteo de cupos por taller (server) usando función RPC agregada.
+  // Es un snapshot inicial informativo: el cupo DEFINITIVO lo decide el trigger
+  // `validar_inscripcion` en la BD al momento del INSERT (con FOR UPDATE), por
+  // lo que el número acá puede estar ligeramente desactualizado si muchos
+  // inscriben a la vez. Por eso la UI aclara que el cupo "se confirma al
+  // presionar Inscribirme".
+  // OPTIMIZACIÓN: usamos una función RPC que hace el GROUP BY en PostgreSQL
+  // en lugar de transferir todas las filas de inscripciones y contarlas en JS.
   const tallerIds = (talleres ?? []).map((t) => t.id);
   let cuposMap: Record<string, number> = {};
   if (tallerIds.length) {
-    const { data: counts } = await supabase
-      .from("inscripciones")
-      .select("taller_id")
-      .in("taller_id", tallerIds);
+    const { data: counts } = await supabase.rpc("contar_cupos_talleres", {
+      p_taller_ids: tallerIds,
+    });
     cuposMap = (counts ?? []).reduce<Record<string, number>>((acc, row) => {
-      const tid = (row as { taller_id: string }).taller_id;
-      acc[tid] = (acc[tid] ?? 0) + 1;
+      const tid = (row as { taller_id: string; cantidad: number }).taller_id;
+      const cantidad = (row as { taller_id: string; cantidad: number }).cantidad;
+      acc[tid] = cantidad;
       return acc;
     }, {});
   }

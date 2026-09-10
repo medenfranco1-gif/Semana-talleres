@@ -131,6 +131,32 @@ as $$
   select count(*)::integer from public.inscripciones where taller_id = p_taller_id;
 $$;
 
+-- 2a-bis) conteo agregado de cupos para múltiples talleres (optimización de catálogo)
+-- Devuelve taller_id y la cantidad de inscripciones por cada uno.
+-- Usado por el catálogo para evitar transferir todas las filas de inscripciones
+-- y contarlas en JavaScript. Solo expone IDs de talleres y cantidades (no datos
+-- personales), así que es seguro para todos los usuarios autenticados.
+create or replace function public.contar_cupos_talleres(p_taller_ids uuid[])
+returns table(taller_id uuid, cantidad bigint)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select i.taller_id, count(*) as cantidad
+  from public.inscripciones i
+  where i.taller_id = any(p_taller_ids)
+  group by i.taller_id;
+$$;
+
+comment on function public.contar_cupos_talleres(uuid[]) is
+  'Devuelve el conteo de inscripciones por taller para una lista de IDs. Optimización del catálogo para evitar transferir miles de filas.';
+
+-- Endurecer permisos: solo usuarios autenticados, no anon ni public
+revoke execute on function public.contar_cupos_talleres(uuid[]) from public;
+revoke execute on function public.contar_cupos_talleres(uuid[]) from anon;
+grant execute on function public.contar_cupos_talleres(uuid[]) to authenticated;
+
 -- 2b) helper: ¿hay solapamiento horario del alumno ese día con otro taller?
 create or replace function public.alumno_tiene_sopa_en_dia(
   p_alumno_id uuid,
