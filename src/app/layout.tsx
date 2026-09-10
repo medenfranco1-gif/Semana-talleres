@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
 import { AuthRedirectHandler } from "@/components/AuthRedirectHandler";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title: "Escuela Leonardo Da Vinci · Semana de Talleres",
@@ -27,6 +28,7 @@ export default function RootLayout({
             </span>
           </div>
         </footer>
+        <Analytics />
       </body>
     </html>
   );
