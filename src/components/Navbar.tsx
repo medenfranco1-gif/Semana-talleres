@@ -57,8 +57,9 @@ export function Navbar() {
     const run = async (): Promise<void> => {
       try {
         const {
-          data: { user },
-        } = await withTimeout(supabase.auth.getUser(), PROFILE_REQUEST_TIMEOUT_MS);
+          data: { session },
+        } = await withTimeout(supabase.auth.getSession(), PROFILE_REQUEST_TIMEOUT_MS);
+        const user = session?.user; // Solo presentación; permisos siempre en servidor/RLS.
         if (!user) {
           setAlumno(null);
           setCargando(false);
@@ -97,9 +98,10 @@ export function Navbar() {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
         setAlumno(null);
-        void cargarPerfil();
+        setCargando(false);
       } else if (event === "SIGNED_IN") {
-        void cargarPerfil();
+        // Salir del callback de Auth antes de consultar otro método del cliente.
+        window.setTimeout(() => void cargarPerfil(), 0);
       }
     });
 
@@ -150,14 +152,17 @@ export function Navbar() {
             <span className="sm:hidden">FAQ</span>
           </Link>
           {alumno && (
-            <Link href="/catalogo" className={linkCls("/catalogo")}>
+            // Full navigation intentionally discards Next 14's stale client Router Cache.
+            // eslint-disable-next-line @next/next/no-html-link-for-pages
+            <a href="/catalogo" className={linkCls("/catalogo")}>
               Catálogo
-            </Link>
+            </a>
           )}
           {alumno && (
-            <Link href="/mi-itinerario" className={linkCls("/mi-itinerario")}>
+            // eslint-disable-next-line @next/next/no-html-link-for-pages
+            <a href="/mi-itinerario" className={linkCls("/mi-itinerario")}>
               Mi itinerario
-            </Link>
+            </a>
           )}
           {alumno?.rol === "admin" && (
             <Link href="/admin" className={linkCls("/admin")}>

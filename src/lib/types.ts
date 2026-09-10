@@ -77,4 +77,11 @@ export interface ResultadoInscripcion {
   ok: boolean;
   mensaje: string;
   taller_id?: string;
+  inscripcion?: Inscripcion;
+}
+
+export interface CatalogoPublico {
+  talleres: Taller[];
+  categorias: Categoria[];
+  config: Configuracion | null;
 }

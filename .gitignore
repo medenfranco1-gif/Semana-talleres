@@ -25,3 +25,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts.bak
+
+# disposable test data and authenticated load fixtures
+.test-data/
+test-results/
+load/fixtures.json

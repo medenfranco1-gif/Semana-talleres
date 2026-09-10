@@ -15,6 +15,9 @@ import type { ResultadoInscripcion } from "@/lib/types";
 export async function inscribirAction(
   tallerId: string,
 ): Promise<ResultadoInscripcion> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tallerId)) {
+    return { ok: false, mensaje: "El taller no es válido." };
+  }
   const alumno = await getAlumnoActual();
   if (!alumno) {
     return { ok: false, mensaje: "Tenés que iniciar sesión para inscribirte." };
@@ -22,38 +25,12 @@ export async function inscribirAction(
 
   const supabase = createServerSupaClient();
 
-  // doble inscripción idempotente: chequear si ya está inscripto
-  const { data: existente } = await supabase
-    .from("inscripciones")
-    .select("id")
-    .eq("alumno_id", alumno.id)
-    .eq("taller_id", tallerId)
-    .maybeSingle();
-
-  if (existente) {
-    return { ok: false, mensaje: "Ya estás inscripto en este taller.", taller_id: tallerId };
+  const { data, error } = await supabase.rpc("registrar_taller", { p_taller_id: tallerId });
+  if (error || !data) {
+    // Un timeout puede ocurrir después del COMMIT. Reintentar es idempotente.
+    return { ok: false, mensaje: "No pudimos confirmar la respuesta. Reintentá el mismo taller para verificar tu inscripción.", taller_id: tallerId };
   }
-
-  const { error } = await supabase.from("inscripciones").insert({
-    alumno_id: alumno.id,
-    taller_id: tallerId,
-  });
-
-  if (error) {
-    return {
-      ok: false,
-      mensaje: traducirErrorInscripcion(error.message),
-      taller_id: tallerId,
-    };
-  }
-
-  revalidatePath("/catalogo");
-  revalidatePath("/mi-itinerario");
-  return {
-    ok: true,
-    mensaje: "¡Inscripción confirmada!",
-    taller_id: tallerId,
-  };
+  return { ...data, mensaje: data.ok ? data.mensaje : traducirErrorInscripcion(data.mensaje) };
 }
 
 /**
@@ -104,7 +81,7 @@ function traducirErrorInscripcion(msg: string): string {
   if (m.includes("no está disponible")) {
     return "Este taller no está disponible para inscripción.";
   }
-  if (m.includes("inscripciones están cerradas") && m.includes("día")) {
+  if (m.includes("inscripciones para el día") && m.includes("cerradas")) {
     return "Las inscripciones para ese día están cerradas.";
   }
   if (m.includes("inscripciones están cerradas")) {

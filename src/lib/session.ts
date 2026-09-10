@@ -1,11 +1,12 @@
 import { createServerSupaClient } from "./supabase-server";
 import type { Alumno } from "./types";
+import { cache } from "react";
 
 /**
  * Devuelve el perfil `alumnos` del usuario autenticado actual, o null si no
  * hay sesión. Para usar en Server Components / Route Handlers.
  */
-export async function getAlumnoActual(): Promise<Alumno | null> {
+export const getAlumnoActual = cache(async (): Promise<Alumno | null> => {
   const supabase = createServerSupaClient();
   const {
     data: { user },
@@ -20,7 +21,7 @@ export async function getAlumnoActual(): Promise<Alumno | null> {
 
   if (error || !data) return null;
   return data as Alumno;
-}
+});
 
 /**
  * ¿El usuario actual es admin?

@@ -1,5 +1,8 @@
 -- =====================================================================
 -- SEMANA DE TALLERES — Esquema de base de datos Supabase
+-- BOOTSTRAP HISTÓRICO: aplicar luego supabase/migrations/*.sql en orden.
+-- No usar este archivo solo ni volver a ejecutarlo sobre una base migrada:
+-- recrea funciones/políticas antiguas. Ver docs/registration-audit.md.
 -- =====================================================================
 -- Ejecutar en: Supabase Dashboard > SQL Editor (o supabase db push)
 -- Orden: 1) extensiones, 2) tablas, 3) funciones, 4) triggers,

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createServerSupaClient, createAdminClient } from "@/lib/supabase-server";
 import { getAlumnoActual } from "@/lib/session";
 import type { Taller } from "@/lib/types";
@@ -39,6 +39,7 @@ export async function crearTallerAction(data: Omit<Taller, "id" | "created_at" |
   });
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
+  revalidateTag("catalogo-publico");
   revalidatePath("/catalogo");
   return { ok: true };
 }
@@ -67,6 +68,7 @@ export async function actualizarTallerAction(
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
+  revalidateTag("catalogo-publico");
   revalidatePath("/catalogo");
   return { ok: true };
 }
@@ -77,6 +79,7 @@ export async function eliminarTallerAction(id: string): Promise<{ ok: boolean; e
   const { error } = await supabase.from("talleres").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
+  revalidateTag("catalogo-publico");
   revalidatePath("/catalogo");
   return { ok: true };
 }
@@ -90,6 +93,7 @@ export async function toggleTallerActivoAction(
   const { error } = await supabase.from("talleres").update({ activo }).eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
+  revalidateTag("catalogo-publico");
   revalidatePath("/catalogo");
   return { ok: true };
 }
@@ -117,6 +121,7 @@ export async function asignarPendientesAction(): Promise<{
   const sinCupo = filas.filter((f) => !f.taller_id).length;
 
   revalidatePath("/admin");
+  revalidateTag("catalogo-publico");
   revalidatePath("/catalogo");
   revalidatePath("/mi-itinerario");
   return { ok: true, asignados, sinCupo };
@@ -143,6 +148,7 @@ export async function actualizarConfigAction(data: {
     .eq("id", 1);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
+  revalidateTag("catalogo-publico");
   revalidatePath("/catalogo");
   revalidatePath("/");
   return { ok: true };
@@ -160,6 +166,7 @@ export async function crearCategoriaAction(nombre: string): Promise<{ ok: boolea
     .single();
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
+  revalidateTag("catalogo-publico");
   revalidatePath("/catalogo");
   return { ok: true };
 }
@@ -170,6 +177,7 @@ export async function eliminarCategoriaAction(id: string): Promise<{ ok: boolean
   const { error } = await supabase.from("categorias").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
+  revalidateTag("catalogo-publico");
   revalidatePath("/catalogo");
   return { ok: true };
 }
@@ -192,6 +200,7 @@ export async function adminDarBajaAction(
     .eq("id", inscripcionId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
+  revalidateTag("catalogo-publico");
   revalidatePath("/catalogo");
   revalidatePath("/mi-itinerario");
   return { ok: true };
@@ -212,42 +221,13 @@ export async function adminCambiarTallerAction(
   await requireAdmin();
   const supabase = createServerSupaClient();
 
-  // 1) leer inscripción actual para saber alumno_id y taller viejo
-  const { data: ins, error: eIns } = await supabase
-    .from("inscripciones")
-    .select("id, alumno_id, taller_id")
-    .eq("id", inscripcionId)
-    .single();
-  if (eIns || !ins) {
-    return { ok: false, error: "No se encontró la inscripción." };
-  }
-  if (ins.taller_id === nuevoTallerId) {
-    return { ok: false, error: "El taller nuevo es igual al actual." };
-  }
-
-  // 2) borrar la inscripción vieja (libera el cupo del taller origen)
-  const { error: eDel } = await supabase
-    .from("inscripciones")
-    .delete()
-    .eq("id", inscripcionId);
-  if (eDel) return { ok: false, error: eDel.message };
-
-  // 3) insertar la nueva inscripción; el trigger valida cupo/solapamiento/etc.
-  //    Si falla, restauramos la inscripción vieja para no dejar al alumno sin nada.
-  const { error: eIns2 } = await supabase.from("inscripciones").insert({
-    alumno_id: ins.alumno_id,
-    taller_id: nuevoTallerId,
+  const { error } = await supabase.rpc("cambiar_taller", {
+    p_inscripcion_id: inscripcionId, p_taller_id: nuevoTallerId,
   });
-  if (eIns2) {
-    // rollback: volver a insertar la vieja
-    await supabase.from("inscripciones").insert({
-      alumno_id: ins.alumno_id,
-      taller_id: ins.taller_id,
-    });
-    return { ok: false, error: traducirErrorCambio(eIns2.message) };
-  }
+  if (error) return { ok: false, error: traducirErrorCambio(error.message) };
 
   revalidatePath("/admin");
+  revalidateTag("catalogo-publico");
   revalidatePath("/catalogo");
   revalidatePath("/mi-itinerario");
   return { ok: true };

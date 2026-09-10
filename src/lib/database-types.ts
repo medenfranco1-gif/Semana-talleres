@@ -5,6 +5,8 @@
 // completa con `supabase gen types typescript` contra tu proyecto.
 // =====================================================================
 
+import type { CatalogoPublico, ResultadoInscripcion } from "./types";
+
 export interface Database {
   public: {
     Tables: {
@@ -178,7 +180,12 @@ export interface Database {
       };
     };
     Views: { [key: string]: never };
-    Functions: { [key: string]: never };
+    Functions: {
+      catalogo_publico: { Args: Record<string, never>; Returns: CatalogoPublico };
+      registrar_taller: { Args: { p_taller_id: string }; Returns: ResultadoInscripcion };
+      cambiar_taller: { Args: { p_inscripcion_id: string; p_taller_id: string }; Returns: undefined };
+      asignar_talleres_pendientes: { Args: Record<string, never>; Returns: { alumno_id: string; taller_id: string | null; error: string | null }[] };
+    };
     Enums: { [key: string]: never };
     CompositeTypes: { [key: string]: never };
   };

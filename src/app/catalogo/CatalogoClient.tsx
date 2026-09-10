@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { DIAS, fmtRango } from "@/lib/format";
 import {
   evaluarBloqueoCliente,
@@ -22,43 +21,33 @@ interface Props {
   categorias: Categoria[];
   config: Configuracion | null;
   inscripcionesAlumno: Inscripcion[];
-  alumnoId: string;
 }
 
 type FiltroCat = string | "todas";
 
-/**
- * Catálogo de talleres para el alumno.
- *
- * Nota de arquitectura: NO se usa Supabase Realtime en el catálogo.
- * El plan gratuito de Supabase limita las conexiones Realtime y, con
- * ~500 alumnos navegando a la vez, se agotarían rápido. En su lugar:
- *  - Los cupos se cargan como un snapshot inicial (Server Component).
- *  - El cupo *real* lo decide el trigger `validar_inscripcion` en la BD
- *    al momento del INSERT, con bloqueo `FOR UPDATE` (no se saltea).
- *  - Tras una inscripción exitosa, refrescamos la página con
- *    `router.refresh()`, que reejecuta el Server Component y trae cupos
- *    e inscripciones actualizados, sin mantener una conexión persistente.
- */
+// Snapshot compartido de cupos; la inscripción se confirma en PostgreSQL.
 export function CatalogoClient({
   talleres: talleresInit,
   categorias,
   config: configInit,
   inscripcionesAlumno: inscripcionesInit,
-  alumnoId,
 }: Props) {
   // Estado local inicializado desde el snapshot del Server Component.
   // No hay suscripción a Realtime: el estado cambia solo cuando el usuario
-  // interactúa o tras `router.refresh()`.
-  const router = useRouter();
-  const [talleres] = useState<Taller[]>(talleresInit);
-  const [config] = useState<Configuracion | null>(configInit);
+  // interactúa o recibe un nuevo snapshot del servidor.
+  const pending = useRef(false);
+  const [talleres, setTalleres] = useState<Taller[]>(talleresInit);
+  const [config, setConfig] = useState<Configuracion | null>(configInit);
   const [inscripciones, setInscripciones] = useState<Inscripcion[]>(inscripcionesInit);
 
   const [filtroCat, setFiltroCat] = useState<FiltroCat>("todas");
   const [diaActivo, setDiaActivo] = useState<1 | 2 | 3>(1);
   const [resultados, setResultados] = useState<Record<string, ResultadoInscripcion>>({});
   const [procesando, setProcesando] = useState<Set<string>>(new Set());
+
+  useEffect(() => { setTalleres(talleresInit); }, [talleresInit]);
+  useEffect(() => { setConfig(configInit); }, [configInit]);
+  useEffect(() => { setInscripciones(inscripcionesInit); }, [inscripcionesInit]);
 
   // mapas para validación
   const talleresMap = useMemo(() => {
@@ -72,48 +61,27 @@ export function CatalogoClient({
     [inscripciones],
   );
 
-  // ---------- INSCRIPCIÓN ----------
-  // Sin Realtime: tras una inscripción exitosa pedimos al Server Component
-  // que se vuelva a renderizar (router.refresh), lo que trae cupos e
-  // inscripciones frescos desde la BD. Es un pedido por demanda, no una
-  // conexión persistente, así no consume conexiones del plan gratuito.
-  const handleInscribir = useCallback(
-    async (tallerId: string) => {
-      setProcesando((p) => new Set(p).add(tallerId));
-      try {
-        const res = await inscribirAction(tallerId);
-        setResultados((r) => ({ ...r, [tallerId]: res }));
-        if (res.ok) {
-          // Refresco server-side: el Server Component vuelve a consultar
-          // cupos e inscripciones. (Equivalente a lo que haría Realtime,
-          // pero por demanda y sin conexión persistente.)
-          router.refresh();
-          // Optimista local: marcamos el taller como inscripto para que el
-          // botón cambie de inmediato antes de que llegue el refresh.
-          setInscripciones((prev) => {
-            if (prev.some((i) => i.taller_id === tallerId)) return prev;
-            return [
-              ...prev,
-              {
-                id: `optimistic-${tallerId}`,
-                alumno_id: alumnoId,
-                taller_id: tallerId,
-                fecha_inscripcion: new Date().toISOString(),
-                created_at: new Date().toISOString(),
-              } as Inscripcion,
-            ];
-          });
-        }
-      } finally {
-        setProcesando((p) => {
-          const n = new Set(p);
-          n.delete(tallerId);
-          return n;
-        });
+  const handleInscribir = useCallback(async (tallerId: string) => {
+    if (pending.current) return;
+    pending.current = true;
+    setProcesando(new Set([tallerId]));
+    try {
+      const res = await inscribirAction(tallerId);
+      setResultados(r => ({ ...r, [tallerId]: res }));
+      if (res.ok && res.inscripcion) {
+        const confirmed = res.inscripcion;
+        setInscripciones(prev => prev.some(i => i.id === confirmed.id) ? prev : [...prev, confirmed]);
+        setTalleres(prev => prev.map(t => t.id === tallerId
+          ? { ...t, cupo_actual: Math.min(t.cupo_max, (t.cupo_actual ?? 0) + 1) } : t));
       }
-    },
-    [alumnoId, router],
-  );
+    } catch {
+      setResultados(r => ({ ...r, [tallerId]: { ok: false,
+        mensaje: "No pudimos confirmar la respuesta. Reintentá el mismo taller para verificar tu inscripción." } }));
+    } finally {
+      pending.current = false;
+      setProcesando(new Set());
+    }
+  }, []);
 
   // Wrapper con confirmación previa: muestra un diálogo "¿seguro?" con el
   // título del taller antes de disparar la inscripción real.
@@ -301,7 +269,7 @@ export function CatalogoClient({
                       yaInscriptoIds,
                     )}
                     resultado={resultados[t.id]}
-                    procesando={procesando.has(t.id)}
+                    procesando={procesando.size > 0}
                     onInscribir={() => handleInscribirConConfirmacion(t)}
                     yaInscripto={yaInscriptoIds.has(t.id)}
                   />

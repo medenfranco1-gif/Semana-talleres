@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import type { Database } from "./database-types";
+import { cache } from "react";
 
 const SUPABASE_REQUEST_TIMEOUT_MS = 8_000;
 
@@ -39,7 +40,7 @@ async function fetchWithTimeout(
  * Cliente Supabase para Server Components / Route Handlers / Server Actions.
  * Lee/escribe cookies para propagar la sesión del usuario autenticado.
  */
-export function createServerSupaClient() {
+export const createServerSupaClient = cache(() => {
   const cookieStore = cookies();
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,6 +62,19 @@ export function createServerSupaClient() {
           }
         },
       },
+    },
+  );
+});
+
+// No cookies or service key: only public catalog data may enter shared cache.
+export function createCatalogClient() {
+  return createServiceClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      db: { timeout: SUPABASE_REQUEST_TIMEOUT_MS, retry: false },
+      global: { fetch: fetchWithTimeout },
     },
   );
 }

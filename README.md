@@ -1,6 +1,6 @@
 # Semana de Talleres
 
-Aplicación web para gestionar la inscripción a los talleres de la "Semana de Talleres" del colegio. Construida con Next.js (App Router), Supabase y Tailwind CSS. Pensada para deploy en Vercel (plan gratuito) y para usarse desde el celular durante el evento, soportando hasta ~500 alumnos simultáneos con los planes gratuitos de Vercel y Supabase.
+Aplicación web para gestionar la inscripción a los talleres de la "Semana de Talleres" del colegio. Construida con Next.js (App Router), Supabase y Tailwind CSS. La capacidad del despliegue debe medirse: ver [auditoría y migración](docs/registration-audit.md) y [prueba de 400 usuarios](load/README.md).
 
 ## Funcionalidades
 
@@ -36,7 +36,7 @@ Aplicación web para gestionar la inscripción a los talleres de la "Semana de T
    - `Project URL`
    - `anon public` key
    - `service_role` key
-3. Abrí **SQL Editor**, pegá el contenido de `supabase/schema.sql` y ejecutá. Esto crea:
+3. En una base nueva, ejecutá `supabase/schema.sql` y después **todos los archivos de `supabase/migrations/` en orden**. En una base existente aplicá solo las migraciones pendientes como `postgres`; no vuelvas a ejecutar el bootstrap. Esto crea:
    - Tablas: `alumnos`, `talleres`, `inscripciones`, `categorias`, `configuracion`.
    - Índices en `inscripciones(taller_id)` y `inscripciones(alumno_id)` (hot paths de cupo e itinerario).
    - Funciones y triggers: validación de inscripciones (`validar_inscripcion`), helpers de cupo/solapamiento/categoría, mantenimiento de `updated_at`, **bloqueo de cambio de rol** (`bloquear_cambio_rol`), sincronización `auth.users → alumnos`.
