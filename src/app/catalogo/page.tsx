@@ -6,6 +6,9 @@ import type { Taller, Categoria, Configuracion, Inscripcion } from "@/lib/types"
 
 export const metadata = { title: "Catálogo · Semana de Talleres" };
 
+// Forzar revalidación en cada request para mostrar cupos actualizados
+export const revalidate = 0;
+
 export default async function CatalogoPage() {
   const alumno = await getAlumnoActual();
   if (!alumno) redirect("/login?redirect=/catalogo");

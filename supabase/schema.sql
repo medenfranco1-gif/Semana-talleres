@@ -312,10 +312,19 @@ begin
 
   -- 2) cupo máximo — ATÓMICO: bloquea la fila del taller para serializar
   --    inscripciones simultáneas al MISMO taller y evitar overselling.
-  --    El índice inscripciones_taller_id_idx hace que el count sea rápido.
+  --    Usamos FOR UPDATE en una subquery para lockear las filas antes del count.
   perform 1 from public.talleres where id = new.taller_id for update;
 
-  select count(*) into v_cupo from public.inscripciones where taller_id = new.taller_id;
+  -- Lock + count atómico: bloqueamos las inscripciones existentes con un SELECT
+  -- en subquery, luego contamos. Esto evita la race condition donde dos
+  -- transacciones leen el mismo count simultáneamente.
+  select count(*) into v_cupo
+  from (
+    select 1 from public.inscripciones
+    where taller_id = new.taller_id
+    for update
+  ) as locked_rows;
+
   if v_cupo >= v_taller.cupo_max then
     raise exception 'El taller alcanzó el cupo máximo (%).', v_taller.cupo_max;
   end if;
