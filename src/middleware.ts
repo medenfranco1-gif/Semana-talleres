@@ -58,8 +58,18 @@ function maintenanceResponse(): NextResponse {
  * Si `PRIVATE_TEST_PASSWORD` no está configurada, el gate queda desactivado.
  * Esto permite desplegar el cambio antes de cargar la clave en Vercel sin dejar
  * el sitio inaccesible por una variable olvidada.
+ *
+ * Excluye /auth/callback y /reset del gate para que los links de recuperación
+ * de contraseña funcionen correctamente.
  */
 export function middleware(request: NextRequest): NextResponse {
+  const pathname = request.nextUrl.pathname;
+
+  // Excluir rutas de auth del gate
+  if (pathname === "/auth/callback" || pathname === "/reset") {
+    return NextResponse.next();
+  }
+
   const expectedPassword = process.env.PRIVATE_TEST_PASSWORD;
   if (!expectedPassword) {
     return NextResponse.next();
