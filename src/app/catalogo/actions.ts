@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServerSupaClient } from "@/lib/supabase-server";
 import { getAlumnoActual } from "@/lib/session";
-import { puedeInscribirsePorFranja } from "@/lib/franjas-inscripcion";
+import { estadoFranjaTaller } from "@/lib/franjas-inscripcion";
 import type { ResultadoInscripcion } from "@/lib/types";
 
 /**
@@ -17,8 +17,9 @@ import type { ResultadoInscripcion } from "@/lib/types";
  * porque la base ya tiene UNIQUE (alumno_id, taller_id). Hacemos el INSERT
  * directamente y traducimos el error de unique violation a mensaje amigable.
  *
- * FRANJAS HORARIAS: Para talleres del miércoles, validamos que la inscripción
- * esté dentro de la franja horaria permitida antes de ejecutar el INSERT.
+ * FRANJAS MANUALES (Día 1): validamos server-side que la franja del taller
+ * esté abierta manualmente (flags en `configuracion`) antes del INSERT.
+ * No se usa reloj ni Date: se leen los flags franja_1/2/3_abierta.
  */
 export async function inscribirAction(
   tallerId: string,
@@ -33,53 +34,49 @@ export async function inscribirAction(
 
   const supabase = createServerSupaClient();
 
-  // VALIDACIÓN DE FRANJAS: Obtener el taller para verificar su franja horaria
-  const { data: taller, error: errorTaller } = await supabase
-    .from("talleres")
-    .select("*")
-    .eq("id", tallerId)
-    .single();
+  // VALIDACIÓN DE FRANJAS MANUALES: traemos el taller y los flags de config
+  // en paralelo. La franja se decide SOLO por los flags (sin reloj).
+  const [
+    { data: taller, error: errorTaller },
+    { data: config, error: errorConfig },
+  ] = await Promise.all([
+    supabase.from("talleres").select("*").eq("id", tallerId).single(),
+    supabase
+      .from("configuracion")
+      .select(
+        "inscripciones_abiertas_global, inscripciones_abiertas_dia1, franja_1_abierta, franja_2_abierta, franja_3_abierta",
+      )
+      .eq("id", 1)
+      .single(),
+  ]);
 
   if (errorTaller || !taller) {
     console.log(`[inscripcion] taller_no_encontrado duracion=${Date.now() - startTime}ms`);
     return { ok: false, mensaje: "El taller no existe.", taller_id: tallerId };
   }
 
-  // Verificar franja horaria (solo para miércoles)
-  if (!puedeInscribirsePorFranja(taller)) {
-    const duration = Date.now() - startTime;
-    console.log(`[inscripcion] fuera_de_franja duracion=${duration}ms dia=${taller.dia} hora=${taller.hora_inicio}`);
-
-    // Determinar mensaje específico según el estado
-    if (taller.dia === 3) { // miércoles
-      const ahora = new Date();
-      const horaArgentina = ahora.toLocaleString("en-US", {
-        timeZone: "America/Argentina/Buenos_Aires",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
-
-      // Si es antes de las 20:00 o después de las 20:30
-      if (horaArgentina < "20:00") {
-        return {
-          ok: false,
-          mensaje: "Este taller todavía no está habilitado en esta franja de inscripción.",
-          taller_id: tallerId,
-        };
-      } else {
-        return {
-          ok: false,
-          mensaje: "La franja de inscripción para este taller ya finalizó.",
-          taller_id: tallerId,
-        };
-      }
-    }
-
-    // Caso genérico (taller fuera de franjas definidas)
+  if (errorConfig || !config) {
+    console.log(`[inscripcion] config_no_encontrada duracion=${Date.now() - startTime}ms`);
     return {
       ok: false,
-      mensaje: "Este taller no tiene franja de inscripción asignada.",
+      mensaje: "No se pudo verificar el estado de inscripción. Intentá de nuevo.",
+      taller_id: tallerId,
+    };
+  }
+
+  // Verificar franja manual (solo aplica al Día 1; otros días pasan derecho).
+  const resultadoFranja = estadoFranjaTaller(taller, config);
+  if (!resultadoFranja.permitido) {
+    const duration = Date.now() - startTime;
+    console.log(
+      `[inscripcion] franja_cerrada duracion=${duration}ms dia=${taller.dia} hora=${taller.hora_inicio} estado=${resultadoFranja.estado}`,
+    );
+    return {
+      ok: false,
+      mensaje:
+        resultadoFranja.estado === "fuera_de_franja"
+          ? "Este taller no tiene franja de inscripción asignada."
+          : "Inscripciones cerradas",
       taller_id: tallerId,
     };
   }

@@ -158,6 +158,9 @@ export interface Database {
           inscripciones_abiertas_dia1: boolean;
           inscripciones_abiertas_dia2: boolean;
           inscripciones_abiertas_dia3: boolean;
+          franja_1_abierta: boolean;
+          franja_2_abierta: boolean;
+          franja_3_abierta: boolean;
           updated_at: string;
         };
         Insert: {
@@ -166,6 +169,9 @@ export interface Database {
           inscripciones_abiertas_dia1?: boolean;
           inscripciones_abiertas_dia2?: boolean;
           inscripciones_abiertas_dia3?: boolean;
+          franja_1_abierta?: boolean;
+          franja_2_abierta?: boolean;
+          franja_3_abierta?: boolean;
           updated_at?: string;
         };
         Update: {
@@ -173,6 +179,9 @@ export interface Database {
           inscripciones_abiertas_dia1?: boolean;
           inscripciones_abiertas_dia2?: boolean;
           inscripciones_abiertas_dia3?: boolean;
+          franja_1_abierta?: boolean;
+          franja_2_abierta?: boolean;
+          franja_3_abierta?: boolean;
         };
         Relationships: [];
       };

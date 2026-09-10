@@ -129,6 +129,10 @@ export async function actualizarConfigAction(data: {
   inscripciones_abiertas_dia1: boolean;
   inscripciones_abiertas_dia2: boolean;
   inscripciones_abiertas_dia3: boolean;
+  // Franjas MANUALES del Día 1 (control on/off desde admin).
+  franja_1_abierta: boolean;
+  franja_2_abierta: boolean;
+  franja_3_abierta: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
   const supabase = createServerSupaClient();
@@ -139,6 +143,9 @@ export async function actualizarConfigAction(data: {
       inscripciones_abiertas_dia1: data.inscripciones_abiertas_dia1,
       inscripciones_abiertas_dia2: data.inscripciones_abiertas_dia2,
       inscripciones_abiertas_dia3: data.inscripciones_abiertas_dia3,
+      franja_1_abierta: data.franja_1_abierta,
+      franja_2_abierta: data.franja_2_abierta,
+      franja_3_abierta: data.franja_3_abierta,
     })
     .eq("id", 1);
   if (error) return { ok: false, error: error.message };

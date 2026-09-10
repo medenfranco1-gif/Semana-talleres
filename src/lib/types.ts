@@ -60,6 +60,11 @@ export interface Configuracion {
   inscripciones_abiertas_dia1: boolean;
   inscripciones_abiertas_dia2: boolean;
   inscripciones_abiertas_dia3: boolean;
+  // Franjas MANUALES del Día 1 (control on/off desde admin, sin reloj):
+  // franja_1 -> talleres 08:00-09:30, franja_2 -> 10:00-12:00, franja_3 -> 13:00-15:00
+  franja_1_abierta: boolean;
+  franja_2_abierta: boolean;
+  franja_3_abierta: boolean;
   updated_at: string;
 }
 

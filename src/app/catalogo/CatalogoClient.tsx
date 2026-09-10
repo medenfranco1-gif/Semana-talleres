@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { DIAS, fmtRango } from "@/lib/format";
 import {
   evaluarBloqueoCliente,
@@ -60,20 +60,9 @@ export function CatalogoClient({
   const [resultados, setResultados] = useState<Record<string, ResultadoInscripcion>>({});
   const [procesando, setProcesando] = useState<Set<string>>(new Set());
 
-  // Estado para forzar re-render del UI de franjas cada minuto (solo UI, sin requests)
-  const [, setTick] = useState(0);
-
-  // Timer para actualizar UI de franjas cada 30 segundos (solo estado local, sin requests)
-  useEffect(() => {
-    // Solo activar timer si estamos en día miércoles
-    if (diaActivo !== 3) return;
-
-    const interval = setInterval(() => {
-      setTick((t) => t + 1);
-    }, 30000); // 30 segundos
-
-    return () => clearInterval(interval);
-  }, [diaActivo]);
+  // Franjas MANUALES: el estado de apertura viene de `config` (flags franja_N).
+  // No hay timers ni reloj: la UI solo se actualiza cuando cambia la config
+  // (nueva navegación al catálogo) o cuando el usuario interactúa.
 
   // mapas para validación
   const talleresMap = useMemo(() => {
@@ -356,8 +345,8 @@ function TallerCard({
   const mostrarError = resultado && !resultado.ok;
   const mostrarOk = resultado && resultado.ok;
 
-  // Evaluar estado de franja horaria (solo para miércoles)
-  const estadoFranja = estadoFranjaTaller(taller);
+  // Evaluar estado de franja MANUAL (solo Día 1). Depende de los flags de config.
+  const estadoFranja = estadoFranjaTaller(taller, config);
   const bloqueadoPorFranja = !estadoFranja.permitido;
 
   return (
@@ -391,17 +380,13 @@ function TallerCard({
         </div>
       )}
 
-      {/* Indicador de franja horaria para miércoles */}
-      {taller.dia === 3 && bloqueadoPorFranja && (
+      {/* Indicador de franja MANUAL para el Día 1 */}
+      {taller.dia === 1 && bloqueadoPorFranja && (
         <div className="mt-2 rounded-md border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700">
-          {estadoFranja.estado === "proximo" && (
-            <>🕐 {estadoFranja.mensaje}</>
-          )}
-          {estadoFranja.estado === "cerrado" && (
-            <>⏰ {estadoFranja.mensaje}</>
-          )}
-          {estadoFranja.estado === "fuera_de_franja" && (
+          {estadoFranja.estado === "fuera_de_franja" ? (
             <>ℹ️ {estadoFranja.mensaje}</>
+          ) : (
+            <>⏰ Inscripciones cerradas</>
           )}
         </div>
       )}
@@ -446,9 +431,9 @@ function TallerCard({
             title={estadoFranja.mensaje}
             className="btn w-full cursor-not-allowed bg-slate-100 text-slate-400"
           >
-            {estadoFranja.estado === "proximo" && `Abre a las ${estadoFranja.abreA}`}
-            {estadoFranja.estado === "cerrado" && "Franja finalizada"}
-            {estadoFranja.estado === "fuera_de_franja" && "Sin franja asignada"}
+            {estadoFranja.estado === "fuera_de_franja"
+              ? "Sin franja asignada"
+              : "Inscripciones cerradas"}
           </button>
         ) : bloqueado ? (
           <button

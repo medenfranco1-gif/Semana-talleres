@@ -363,6 +363,10 @@ function ConfigTab({
   const [d1, setD1] = useState(config?.inscripciones_abiertas_dia1 ?? false);
   const [d2, setD2] = useState(config?.inscripciones_abiertas_dia2 ?? false);
   const [d3, setD3] = useState(config?.inscripciones_abiertas_dia3 ?? false);
+  // Franjas MANUALES del Día 1 (abrir/cerrar a mano, sin reloj).
+  const [f1, setF1] = useState(config?.franja_1_abierta ?? false);
+  const [f2, setF2] = useState(config?.franja_2_abierta ?? false);
+  const [f3, setF3] = useState(config?.franja_3_abierta ?? false);
   const [saving, setSaving] = useState(false);
 
   async function guardar() {
@@ -372,6 +376,9 @@ function ConfigTab({
       inscripciones_abiertas_dia1: d1,
       inscripciones_abiertas_dia2: d2,
       inscripciones_abiertas_dia3: d3,
+      franja_1_abierta: f1,
+      franja_2_abierta: f2,
+      franja_3_abierta: f3,
     });
     setSaving(false);
     onMsg(
@@ -386,6 +393,18 @@ function ConfigTab({
     { label: "Inscripciones abiertas — Día 1", val: d1, set: setD1 },
     { label: "Inscripciones abiertas — Día 2", val: d2, set: setD2 },
     { label: "Inscripciones abiertas — Día 3", val: d3, set: setD3 },
+  ];
+
+  // Franjas del Día 1. Solo tienen efecto si el global y el Día 1 están abiertos.
+  const franjas: {
+    label: string;
+    detalle: string;
+    val: boolean;
+    set: (v: boolean) => void;
+  }[] = [
+    { label: "Abrir franja 1", detalle: "Talleres 08:00–09:30", val: f1, set: setF1 },
+    { label: "Abrir franja 2", detalle: "Talleres 10:00–12:00", val: f2, set: setF2 },
+    { label: "Abrir franja 3", detalle: "Talleres 13:00–15:00", val: f3, set: setF3 },
   ];
 
   return (
@@ -408,6 +427,29 @@ function ConfigTab({
           </label>
         ))}
       </div>
+
+      <h3 className="mb-2 mt-6 text-base font-semibold text-slate-800">
+        Franjas del Día 1
+      </h3>
+      <p className="mb-3 text-sm text-slate-600">
+        Abrí cada franja a mano para escalonar la inscripción del Día 1. Solo
+        tienen efecto si el global <strong>y</strong> el Día 1 están abiertos.
+      </p>
+      <div className="space-y-3">
+        {franjas.map((f) => (
+          <label
+            key={f.label}
+            className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 p-3"
+          >
+            <span className="flex flex-col">
+              <span className="text-sm font-medium text-slate-700">{f.label}</span>
+              <span className="text-xs text-slate-500">{f.detalle}</span>
+            </span>
+            <Toggle checked={f.val} onChange={f.set} />
+          </label>
+        ))}
+      </div>
+
       <button onClick={guardar} disabled={saving} className="btn-primary mt-4 w-full sm:w-auto">
         {saving ? "Guardando…" : "Guardar"}
       </button>
