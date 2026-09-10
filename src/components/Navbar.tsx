@@ -9,6 +9,10 @@ import type { Alumno } from "@/lib/types";
 
 const PROFILE_REQUEST_TIMEOUT_MS = 5_000;
 
+interface NavbarProps {
+  initialAlumno?: Alumno | null;
+}
+
 /**
  * Resuelve una operación o la rechaza si el servicio remoto no responde a
  * tiempo. Evita que la barra de navegación quede en estado de carga infinito.
@@ -35,18 +39,22 @@ function withTimeout<T>(operation: PromiseLike<T>, milliseconds: number): Promis
 /**
  * Barra de navegación. Muestra acciones según sesión/rol.
  *
+ * OPTIMIZACIÓN: Recibe initialAlumno del servidor para evitar requests duplicadas.
+ * Si initialAlumno está presente, NO hace auth.getUser() + alumnos query en mount.
+ * Solo consulta el perfil cuando hay eventos de auth (SIGNED_IN/OUT) o auth-changed.
+ *
  * Evita la tormenta de peticiones que causó el colapso del API Gateway:
  * - usa el cliente singleton (no crea uno por render);
- * - solo consulta el perfil en rutas autenticadas;
+ * - reutiliza datos SSR cuando están disponibles;
  * - deduplica llamadas concurrentes con un ref;
  * - no dispara `router.refresh()` por cada evento de auth.
  */
-export function Navbar() {
+export function Navbar({ initialAlumno }: NavbarProps) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const pathname = usePathname();
-  const [alumno, setAlumno] = useState<Alumno | null>(null);
-  const [cargando, setCargando] = useState(true);
+  const [alumno, setAlumno] = useState<Alumno | null>(initialAlumno ?? null);
+  const [cargando, setCargando] = useState(initialAlumno === undefined);
   const inflight = useRef<Promise<void> | null>(null);
 
   // Carga el perfil del usuario actual. Si ya hay una carga en curso, espera
@@ -87,10 +95,12 @@ export function Navbar() {
   }, [supabase]);
 
   useEffect(() => {
-    // La navbar vive en el layout global: debe conservar el perfil también en
-    // rutas públicas como `/faq`. Solo hacemos una carga acotada por montaje,
-    // y la deduplicación evita consultas paralelas.
-    void cargarPerfil();
+    // OPTIMIZACIÓN: Si recibimos initialAlumno del servidor, NO hacemos fetch
+    // inicial. Solo reaccionamos a eventos de auth (login/logout).
+    if (initialAlumno === undefined) {
+      // Rutas públicas sin SSR: cargamos client-side
+      void cargarPerfil();
+    }
 
     // Solo reaccionamos a logout/signOut del cliente. Los demás eventos
     // (TOKEN_REFRESHED, INITIALIZED) no deben disparar más peticiones.
@@ -114,7 +124,7 @@ export function Navbar() {
       sub.subscription.unsubscribe();
       window.removeEventListener("auth-changed", onAuthChanged);
     };
-  }, [supabase, cargarPerfil]);
+  }, [supabase, cargarPerfil, initialAlumno]);
 
   async function handleLogout() {
     setAlumno(null);
