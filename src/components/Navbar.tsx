@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import type { Alumno } from "@/lib/types";
 
@@ -34,73 +34,81 @@ function withTimeout<T>(operation: PromiseLike<T>, milliseconds: number): Promis
 
 /**
  * Barra de navegación. Muestra acciones según sesión/rol.
- * Recarga el perfil cuando cambia la sesión: ya sea por onAuthStateChange
- * (login/logout hechos desde el cliente) o por nuestro evento "auth-changed"
- * (login/registro hechos desde server actions, que no disparan el callback de
- * Supabase).
+ *
+ * Evita la tormenta de peticiones que causó el colapso del API Gateway:
+ * - usa el cliente singleton (no crea uno por render);
+ * - solo consulta el perfil en rutas autenticadas;
+ * - deduplica llamadas concurrentes con un ref;
+ * - no dispara `router.refresh()` por cada evento de auth.
  */
 export function Navbar() {
-  // El cliente debe ser estable: crear uno nuevo en cada render hacía que el
-  // useEffect se re-suscribiera y disparara consultas de forma indefinida.
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const pathname = usePathname();
   const [alumno, setAlumno] = useState<Alumno | null>(null);
-  const [loading, setLoading] = useState(true);
+  const inflight = useRef<Promise<void> | null>(null);
+
   const needsProfile = ["/catalogo", "/mi-itinerario", "/admin"].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
 
-  // Carga el perfil solo en áreas que lo necesitan. La navbar está en el
-  // layout global, pero las páginas públicas no deben consultar Supabase.
-  const cargarPerfil = async (): Promise<void> => {
-    try {
-      const {
-        data: { user },
-      } = await withTimeout(supabase.auth.getUser(), PROFILE_REQUEST_TIMEOUT_MS);
-      if (!user) {
-        setAlumno(null);
-        return;
-      }
+  // Carga el perfil del usuario actual. Si ya hay una carga en curso, espera
+  // esa en vez de abrir otra petición paralela.
+  const cargarPerfil = useCallback(async (): Promise<void> => {
+    if (inflight.current) return inflight.current;
 
-      const { data } = await withTimeout(
-        supabase
-          .from("alumnos")
-          .select("*")
-          .eq("auth_user_id", user.id)
-          .single(),
-        PROFILE_REQUEST_TIMEOUT_MS,
-      );
-      setAlumno(data as Alumno | null);
-    } catch {
-      // La navbar es auxiliar: si Supabase está temporalmente lento, no debe
-      // bloquear ni dejar ocultos los enlaces públicos.
-      setAlumno(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const run = async (): Promise<void> => {
+      try {
+        const {
+          data: { user },
+        } = await withTimeout(supabase.auth.getUser(), PROFILE_REQUEST_TIMEOUT_MS);
+        if (!user) {
+          setAlumno(null);
+          return;
+        }
+        const { data } = await withTimeout(
+          supabase
+            .from("alumnos")
+            .select("*")
+            .eq("auth_user_id", user.id)
+            .single(),
+          PROFILE_REQUEST_TIMEOUT_MS,
+        );
+        setAlumno(data as Alumno | null);
+      } catch {
+        setAlumno(null);
+      }
+    };
+
+    inflight.current = run().finally(() => {
+      inflight.current = null;
+    });
+    return inflight.current;
+  }, [supabase]);
 
   useEffect(() => {
     if (!needsProfile) {
       setAlumno(null);
-      setLoading(false);
       return;
     }
 
     void cargarPerfil();
 
-    // Cambios de auth desde el cliente (ej. logout acá mismo).
-    const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      void cargarPerfil();
-      router.refresh();
+    // Solo reaccionamos a logout/signOut del cliente. Los demás eventos
+    // (TOKEN_REFRESHED, INITIALIZED) no deben disparar más peticiones.
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setAlumno(null);
+        void cargarPerfil();
+      } else if (event === "SIGNED_IN") {
+        void cargarPerfil();
+      }
     });
 
-    // Cambios de auth desde server actions (login/registro). Esos NO disparan
-    // onAuthStateChange, así que usamos un evento propio.
+    // Login/registro desde server actions: una sola recarga, sin refresh
+    // automático del router.
     const onAuthChanged = () => {
       void cargarPerfil();
-      router.refresh();
     };
     window.addEventListener("auth-changed", onAuthChanged);
 
@@ -108,15 +116,13 @@ export function Navbar() {
       sub.subscription.unsubscribe();
       window.removeEventListener("auth-changed", onAuthChanged);
     };
-  }, [needsProfile, supabase, router]);
+  }, [needsProfile, supabase, cargarPerfil]);
 
   async function handleLogout() {
-    await supabase.auth.signOut();
     setAlumno(null);
-    // Avisar a otros componentes y refrescar.
+    await supabase.auth.signOut();
     window.dispatchEvent(new Event("auth-changed"));
     router.push("/login");
-    router.refresh();
   }
 
   const linkCls = (href: string) =>
@@ -161,7 +167,9 @@ export function Navbar() {
             </Link>
           )}
 
-          {!loading && !alumno && (
+          {/* Enlaces públicos visibles desde el primer render. No dependen de
+              que Supabase termine de cargar. */}
+          {!alumno && (
             <>
               <Link href="/login" className={linkCls("/login")}>
                 Ingresar

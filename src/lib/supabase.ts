@@ -1,15 +1,24 @@
 "use client";
 
 import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./database-types";
 
+let browserClient: SupabaseClient<Database> | null = null;
+
 /**
- * Cliente Supabase para el navegador (client components).
- * Usa cookies para mantener la sesión persistente (App Router SSR).
+ * Cliente Supabase singleton para el navegador.
+ *
+ * Todos los Client Components deben compartir una instancia. Crear un cliente
+ * nuevo durante cada render reinicia el estado de Auth y puede multiplicar
+ * listeners, refreshes de sesión y peticiones al API Gateway.
  */
-export function createClient() {
-  return createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
+export function createClient(): SupabaseClient<Database> {
+  if (!browserClient) {
+    browserClient = createBrowserClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+  }
+  return browserClient;
 }

@@ -1,18 +1,21 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@/lib/supabase";
 
 /**
  * Componente que detecta cuando Supabase redirige después de un email link
  * (recuperación de contraseña) y manda al usuario a /reset automáticamente.
+ *
+ * Usa el cliente singleton de `@/lib/supabase` para no crear una segunda
+ * instancia de Auth en el navegador (cada instancia propia dispara su propio
+ * `getSession`/`onAuthStateChange`, lo que duplicaba las peticiones al API
+ * Gateway).
  */
 export function AuthRedirectHandler(): null {
   const router = useRouter();
-  // El cliente debe conservar la misma identidad entre renders. Si se crea en
-  // cada render, el efecto se desmonta y vuelve a suscribirse repetidamente.
-  const supabase = useMemo(() => createClientComponentClient(), []);
+  const supabase = createClient();
 
   useEffect(() => {
     // Verificar si hay un hash con access_token (Supabase redirect)
