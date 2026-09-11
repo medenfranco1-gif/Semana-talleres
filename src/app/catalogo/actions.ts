@@ -65,7 +65,7 @@ export async function inscribirAction(
   }
 
   // Verificar franja manual (aplica a los 3 días con controles independientes).
-  const resultadoFranja = estadoFranjaTaller(taller, config as any);
+  const resultadoFranja = estadoFranjaTaller(taller, config);
   if (!resultadoFranja.permitido) {
     const duration = Date.now() - startTime;
     console.log(

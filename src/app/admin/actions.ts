@@ -164,7 +164,7 @@ export async function actualizarConfigAction(data: {
       dia3_franja_1_abierta: data.dia3_franja_1_abierta,
       dia3_franja_2_abierta: data.dia3_franja_2_abierta,
       dia3_franja_3_abierta: data.dia3_franja_3_abierta,
-    } as any)
+    })
     .eq("id", 1);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");

@@ -161,6 +161,12 @@ export interface Database {
           franja_1_abierta: boolean;
           franja_2_abierta: boolean;
           franja_3_abierta: boolean;
+          dia2_franja_1_abierta: boolean;
+          dia2_franja_2_abierta: boolean;
+          dia2_franja_3_abierta: boolean;
+          dia3_franja_1_abierta: boolean;
+          dia3_franja_2_abierta: boolean;
+          dia3_franja_3_abierta: boolean;
           updated_at: string;
         };
         Insert: {
@@ -172,6 +178,12 @@ export interface Database {
           franja_1_abierta?: boolean;
           franja_2_abierta?: boolean;
           franja_3_abierta?: boolean;
+          dia2_franja_1_abierta?: boolean;
+          dia2_franja_2_abierta?: boolean;
+          dia2_franja_3_abierta?: boolean;
+          dia3_franja_1_abierta?: boolean;
+          dia3_franja_2_abierta?: boolean;
+          dia3_franja_3_abierta?: boolean;
           updated_at?: string;
         };
         Update: {
@@ -182,6 +194,12 @@ export interface Database {
           franja_1_abierta?: boolean;
           franja_2_abierta?: boolean;
           franja_3_abierta?: boolean;
+          dia2_franja_1_abierta?: boolean;
+          dia2_franja_2_abierta?: boolean;
+          dia2_franja_3_abierta?: boolean;
+          dia3_franja_1_abierta?: boolean;
+          dia3_franja_2_abierta?: boolean;
+          dia3_franja_3_abierta?: boolean;
         };
         Relationships: [];
       };
