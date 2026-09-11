@@ -6,7 +6,21 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:setup:20": "node tests/load/setup-users.js 20",
+    "test:setup:50": "node tests/load/setup-users.js 50",
+    "test:setup:100": "node tests/load/setup-users.js 100",
+    "test:generate-json:100": "node tests/load/generate-users-json.js 100",
+    "test:register:1": "cross-env REGISTER_COUNT=1 playwright test --project=chromium tests/load/register-playwright.spec.ts",
+    "test:register:5": "cross-env REGISTER_COUNT=5 playwright test --project=chromium tests/load/register-playwright.spec.ts",
+    "test:register:10": "cross-env REGISTER_COUNT=10 playwright test --project=chromium tests/load/register-playwright.spec.ts",
+    "test:register:20": "cross-env REGISTER_COUNT=20 playwright test --project=chromium tests/load/register-playwright.spec.ts",
+    "test:load:1": "cross-env CONCURRENCY=1 playwright test --workers=1 --project=chromium tests/load/load-test.spec.ts",
+    "test:load:5": "cross-env CONCURRENCY=5 playwright test --project=chromium tests/load/load-test.spec.ts",
+    "test:load:10": "cross-env CONCURRENCY=10 playwright test --project=chromium tests/load/load-test.spec.ts",
+    "test:load:20": "cross-env CONCURRENCY=20 playwright test --project=chromium tests/load/load-test.spec.ts",
+    "test:load:50": "cross-env CONCURRENCY=50 playwright test --project=chromium tests/load/load-test.spec.ts",
+    "test:load:custom": "playwright test --project=chromium tests/load/load-test.spec.ts"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",
@@ -20,10 +34,12 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.48.0",
     "@types/node": "^20.14.10",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",
+    "cross-env": "^7.0.3",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5",
     "postcss": "^8.4.39",

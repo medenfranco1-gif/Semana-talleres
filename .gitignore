@@ -21,7 +21,16 @@ yarn-error.log*
 .env
 .env.local
 .env*.local
+.env.loadtest
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts.bak
+
+# pruebas de carga - NO SUBIR CREDENCIALES
+tests/load/register-users.json
+tests/load/resultados-*.json
+tests/load/report/
+test-results/
+playwright-report/
+playwright/.cache/

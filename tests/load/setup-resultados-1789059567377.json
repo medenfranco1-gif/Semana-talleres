@@ -1,0 +1,309 @@
+{
+  "authCreated": 35,
+  "authAlreadyExists": 15,
+  "alumnosCreated": 0,
+  "alumnosAlreadyExists": 50,
+  "errors": 0,
+  "details": [
+    {
+      "user": "medenfranco1+loadtest01@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest02@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest03@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest04@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest05@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest06@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest07@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest08@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest09@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest10@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest11@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest12@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest13@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest14@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest15@gmail.com",
+      "status": "success",
+      "authStatus": "already_exists",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest16@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest17@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest18@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest19@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest20@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest21@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest22@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest23@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest24@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest25@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest26@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest27@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest28@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest29@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest30@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest31@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest32@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest33@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest34@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest35@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest36@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest37@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest38@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest39@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest40@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest41@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest42@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest43@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest44@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest45@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest46@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest47@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest48@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest49@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    },
+    {
+      "user": "medenfranco1+loadtest50@gmail.com",
+      "status": "success",
+      "authStatus": "created",
+      "alumnoStatus": "already_exists"
+    }
+  ]
+}

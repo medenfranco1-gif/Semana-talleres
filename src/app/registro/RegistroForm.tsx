@@ -19,12 +19,10 @@ export function RegistroForm({
     { ok: false },
   );
 
-  // Si la action devolvió ok + redirectTo, avisamos al Navbar que cambió la
-  // sesión (el registro corre en server action, no dispara onAuthStateChange)
-  // y después navegamos.
+  // Si la action devolvió ok + redirectTo, refrescar layout para actualizar
+  // initialAlumno del Navbar, luego navegar al destino.
   useEffect(() => {
     if (state?.ok && state.redirectTo) {
-      window.dispatchEvent(new Event("auth-changed"));
       router.refresh();
       router.push(state.redirectTo);
     }

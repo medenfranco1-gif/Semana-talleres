@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAlumnoActual } from "@/lib/session";
 import { createServerSupaClient } from "@/lib/supabase-server";
+import { getTalleresConCache, getCategoriasConCache } from "@/lib/cache-catalogo";
 import { CatalogoClient } from "./CatalogoClient";
 import type { Taller, Categoria, Configuracion, Inscripcion } from "@/lib/types";
 
@@ -16,16 +17,17 @@ export default async function CatalogoPage() {
 
   const supabase = createServerSupaClient();
 
+  // Queries con cache (talleres y categorías) + queries específicas de usuario
   const [
-    { data: talleres },
-    { data: categorias },
+    talleres,
+    categorias,
     { data: config },
     { data: inscripciones },
   ] = await Promise.all([
-    supabase.from("talleres").select("*").order("dia", { ascending: true }).order("hora_inicio", { ascending: true }),
-    supabase.from("categorias").select("*").eq("activa", true).order("orden", { ascending: true }),
+    getTalleresConCache(),
+    getCategoriasConCache(),
     supabase.from("configuracion").select("*").eq("id", 1).single(),
-    supabase.from("inscripciones").select("*").eq("alumno_id", alumno.id),
+    supabase.from("inscripciones").select("id, taller_id").eq("alumno_id", alumno.id),
   ]);
 
   // conteo de cupos por taller (server) usando función RPC agregada.

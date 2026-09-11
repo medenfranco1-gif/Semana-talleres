@@ -1,0 +1,10 @@
+[
+  {
+    "email": "test01@example.com",
+    "success": false,
+    "duration_ms": 15616,
+    "status": "error",
+    "final_url": "http://localhost:3000/registro",
+    "error_message": "Email address \"test01@example.com\" is invalid"
+  }
+]

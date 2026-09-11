@@ -22,15 +22,10 @@ export function LoginForm({
     { ok: false },
   );
 
-  // Si la action devolvió ok + redirectTo:
-  // 1) Avisamos al Navbar (y a quien escuche) que la sesión cambió, porque el
-  //    login corre en una server action que NO dispara onAuthStateChange del
-  //    navegador, así que el Navbar no se entera solo.
-  // 2) Refrescamos para que el servidor relea las cookies nuevas.
-  // 3) Navegamos al destino.
+  // Si la action devolvió ok + redirectTo, refrescar layout para actualizar
+  // initialAlumno del Navbar, luego navegar al destino.
   useEffect(() => {
     if (state?.ok && state.redirectTo) {
-      window.dispatchEvent(new Event("auth-changed"));
       router.refresh();
       router.push(state.redirectTo);
     }
