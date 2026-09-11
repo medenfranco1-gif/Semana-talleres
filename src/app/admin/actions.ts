@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createServerSupaClient, createAdminClient } from "@/lib/supabase-server";
 import { getAlumnoActual } from "@/lib/session";
 import type { Taller } from "@/lib/types";
@@ -40,6 +40,7 @@ export async function crearTallerAction(data: Omit<Taller, "id" | "created_at" |
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
   revalidatePath("/catalogo");
+  revalidateTag("talleres"); // Invalida cache de talleres
   return { ok: true };
 }
 
@@ -68,6 +69,7 @@ export async function actualizarTallerAction(
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
   revalidatePath("/catalogo");
+  revalidateTag("talleres"); // Invalida cache de talleres
   return { ok: true };
 }
 
@@ -78,6 +80,7 @@ export async function eliminarTallerAction(id: string): Promise<{ ok: boolean; e
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
   revalidatePath("/catalogo");
+  revalidateTag("talleres"); // Invalida cache de talleres
   return { ok: true };
 }
 
@@ -91,6 +94,7 @@ export async function toggleTallerActivoAction(
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
   revalidatePath("/catalogo");
+  revalidateTag("talleres"); // Invalida cache de talleres
   return { ok: true };
 }
 
@@ -129,10 +133,18 @@ export async function actualizarConfigAction(data: {
   inscripciones_abiertas_dia1: boolean;
   inscripciones_abiertas_dia2: boolean;
   inscripciones_abiertas_dia3: boolean;
-  // Franjas MANUALES del Día 1 (control on/off desde admin).
+  // Franjas MANUALES del Día 1
   franja_1_abierta: boolean;
   franja_2_abierta: boolean;
   franja_3_abierta: boolean;
+  // Franjas MANUALES del Día 2
+  dia2_franja_1_abierta: boolean;
+  dia2_franja_2_abierta: boolean;
+  dia2_franja_3_abierta: boolean;
+  // Franjas MANUALES del Día 3
+  dia3_franja_1_abierta: boolean;
+  dia3_franja_2_abierta: boolean;
+  dia3_franja_3_abierta: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
   await requireAdmin();
   const supabase = createServerSupaClient();
@@ -146,7 +158,13 @@ export async function actualizarConfigAction(data: {
       franja_1_abierta: data.franja_1_abierta,
       franja_2_abierta: data.franja_2_abierta,
       franja_3_abierta: data.franja_3_abierta,
-    })
+      dia2_franja_1_abierta: data.dia2_franja_1_abierta,
+      dia2_franja_2_abierta: data.dia2_franja_2_abierta,
+      dia2_franja_3_abierta: data.dia2_franja_3_abierta,
+      dia3_franja_1_abierta: data.dia3_franja_1_abierta,
+      dia3_franja_2_abierta: data.dia3_franja_2_abierta,
+      dia3_franja_3_abierta: data.dia3_franja_3_abierta,
+    } as any)
     .eq("id", 1);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
@@ -168,6 +186,7 @@ export async function crearCategoriaAction(nombre: string): Promise<{ ok: boolea
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
   revalidatePath("/catalogo");
+  revalidateTag("categorias"); // Invalida cache de categorías
   return { ok: true };
 }
 
@@ -178,6 +197,7 @@ export async function eliminarCategoriaAction(id: string): Promise<{ ok: boolean
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin");
   revalidatePath("/catalogo");
+  revalidateTag("categorias"); // Invalida cache de categorías
   return { ok: true };
 }
 

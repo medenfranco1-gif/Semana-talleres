@@ -65,6 +65,14 @@ export interface Configuracion {
   franja_1_abierta: boolean;
   franja_2_abierta: boolean;
   franja_3_abierta: boolean;
+  // Franjas MANUALES del Día 2 (mismos horarios, controles independientes):
+  dia2_franja_1_abierta: boolean;
+  dia2_franja_2_abierta: boolean;
+  dia2_franja_3_abierta: boolean;
+  // Franjas MANUALES del Día 3 (mismos horarios, controles independientes):
+  dia3_franja_1_abierta: boolean;
+  dia3_franja_2_abierta: boolean;
+  dia3_franja_3_abierta: boolean;
   updated_at: string;
 }
 

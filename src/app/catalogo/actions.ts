@@ -44,7 +44,7 @@ export async function inscribirAction(
     supabase
       .from("configuracion")
       .select(
-        "inscripciones_abiertas_global, inscripciones_abiertas_dia1, franja_1_abierta, franja_2_abierta, franja_3_abierta",
+        "inscripciones_abiertas_global, inscripciones_abiertas_dia1, inscripciones_abiertas_dia2, inscripciones_abiertas_dia3, franja_1_abierta, franja_2_abierta, franja_3_abierta, dia2_franja_1_abierta, dia2_franja_2_abierta, dia2_franja_3_abierta, dia3_franja_1_abierta, dia3_franja_2_abierta, dia3_franja_3_abierta",
       )
       .eq("id", 1)
       .single(),
@@ -64,8 +64,8 @@ export async function inscribirAction(
     };
   }
 
-  // Verificar franja manual (solo aplica al Día 1; otros días pasan derecho).
-  const resultadoFranja = estadoFranjaTaller(taller, config);
+  // Verificar franja manual (aplica a los 3 días con controles independientes).
+  const resultadoFranja = estadoFranjaTaller(taller, config as any);
   if (!resultadoFranja.permitido) {
     const duration = Date.now() - startTime;
     console.log(

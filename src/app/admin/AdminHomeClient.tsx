@@ -363,10 +363,18 @@ function ConfigTab({
   const [d1, setD1] = useState(config?.inscripciones_abiertas_dia1 ?? false);
   const [d2, setD2] = useState(config?.inscripciones_abiertas_dia2 ?? false);
   const [d3, setD3] = useState(config?.inscripciones_abiertas_dia3 ?? false);
-  // Franjas MANUALES del Día 1 (abrir/cerrar a mano, sin reloj).
+  // Franjas MANUALES Día 1
   const [f1, setF1] = useState(config?.franja_1_abierta ?? false);
   const [f2, setF2] = useState(config?.franja_2_abierta ?? false);
   const [f3, setF3] = useState(config?.franja_3_abierta ?? false);
+  // Franjas MANUALES Día 2
+  const [d2f1, setD2F1] = useState(config?.dia2_franja_1_abierta ?? false);
+  const [d2f2, setD2F2] = useState(config?.dia2_franja_2_abierta ?? false);
+  const [d2f3, setD2F3] = useState(config?.dia2_franja_3_abierta ?? false);
+  // Franjas MANUALES Día 3
+  const [d3f1, setD3F1] = useState(config?.dia3_franja_1_abierta ?? false);
+  const [d3f2, setD3F2] = useState(config?.dia3_franja_2_abierta ?? false);
+  const [d3f3, setD3F3] = useState(config?.dia3_franja_3_abierta ?? false);
   const [saving, setSaving] = useState(false);
 
   async function guardar() {
@@ -379,6 +387,12 @@ function ConfigTab({
       franja_1_abierta: f1,
       franja_2_abierta: f2,
       franja_3_abierta: f3,
+      dia2_franja_1_abierta: d2f1,
+      dia2_franja_2_abierta: d2f2,
+      dia2_franja_3_abierta: d2f3,
+      dia3_franja_1_abierta: d3f1,
+      dia3_franja_2_abierta: d3f2,
+      dia3_franja_3_abierta: d3f3,
     });
     setSaving(false);
     onMsg(
@@ -395,16 +409,38 @@ function ConfigTab({
     { label: "Inscripciones abiertas — Día 3", val: d3, set: setD3 },
   ];
 
-  // Franjas del Día 1. Solo tienen efecto si el global y el Día 1 están abiertos.
-  const franjas: {
+  // Franjas manuales (controles independientes por día)
+  const franjasDia1: {
     label: string;
     detalle: string;
     val: boolean;
     set: (v: boolean) => void;
   }[] = [
-    { label: "Abrir franja 1", detalle: "Talleres 08:00–09:30", val: f1, set: setF1 },
-    { label: "Abrir franja 2", detalle: "Talleres 10:00–12:00", val: f2, set: setF2 },
-    { label: "Abrir franja 3", detalle: "Talleres 13:00–15:00", val: f3, set: setF3 },
+    { label: "Día 1 - Franja 1", detalle: "Talleres 08:00–09:30", val: f1, set: setF1 },
+    { label: "Día 1 - Franja 2", detalle: "Talleres 10:00–12:00", val: f2, set: setF2 },
+    { label: "Día 1 - Franja 3", detalle: "Talleres 13:00–15:00", val: f3, set: setF3 },
+  ];
+
+  const franjasDia2: {
+    label: string;
+    detalle: string;
+    val: boolean;
+    set: (v: boolean) => void;
+  }[] = [
+    { label: "Día 2 - Franja 1", detalle: "Talleres 08:00–09:30", val: d2f1, set: setD2F1 },
+    { label: "Día 2 - Franja 2", detalle: "Talleres 10:00–12:00", val: d2f2, set: setD2F2 },
+    { label: "Día 2 - Franja 3", detalle: "Talleres 13:00–15:00", val: d2f3, set: setD2F3 },
+  ];
+
+  const franjasDia3: {
+    label: string;
+    detalle: string;
+    val: boolean;
+    set: (v: boolean) => void;
+  }[] = [
+    { label: "Día 3 - Franja 1", detalle: "Talleres 08:00–09:30", val: d3f1, set: setD3F1 },
+    { label: "Día 3 - Franja 2", detalle: "Talleres 10:00–12:00", val: d3f2, set: setD3F2 },
+    { label: "Día 3 - Franja 3", detalle: "Talleres 13:00–15:00", val: d3f3, set: setD3F3 },
   ];
 
   return (
@@ -429,14 +465,51 @@ function ConfigTab({
       </div>
 
       <h3 className="mb-2 mt-6 text-base font-semibold text-slate-800">
-        Franjas del Día 1
+        Control de franjas por día (manual)
       </h3>
       <p className="mb-3 text-sm text-slate-600">
-        Abrí cada franja a mano para escalonar la inscripción del Día 1. Solo
-        tienen efecto si el global <strong>y</strong> el Día 1 están abiertos.
+        Cada día tiene sus propios controles de franja. Abrir/cerrar una franja de un día NO
+        afecta otros días.
       </p>
-      <div className="space-y-3">
-        {franjas.map((f) => (
+
+      {/* Día 1 */}
+      <div className="mb-4 space-y-3">
+        <h4 className="text-sm font-medium text-slate-700">Día 1</h4>
+        {franjasDia1.map((f) => (
+          <label
+            key={f.label}
+            className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 p-3"
+          >
+            <span className="flex flex-col">
+              <span className="text-sm font-medium text-slate-700">{f.label}</span>
+              <span className="text-xs text-slate-500">{f.detalle}</span>
+            </span>
+            <Toggle checked={f.val} onChange={f.set} />
+          </label>
+        ))}
+      </div>
+
+      {/* Día 2 */}
+      <div className="mb-4 space-y-3">
+        <h4 className="text-sm font-medium text-slate-700">Día 2</h4>
+        {franjasDia2.map((f) => (
+          <label
+            key={f.label}
+            className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 p-3"
+          >
+            <span className="flex flex-col">
+              <span className="text-sm font-medium text-slate-700">{f.label}</span>
+              <span className="text-xs text-slate-500">{f.detalle}</span>
+            </span>
+            <Toggle checked={f.val} onChange={f.set} />
+          </label>
+        ))}
+      </div>
+
+      {/* Día 3 */}
+      <div className="mb-4 space-y-3">
+        <h4 className="text-sm font-medium text-slate-700">Día 3</h4>
+        {franjasDia3.map((f) => (
           <label
             key={f.label}
             className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 p-3"

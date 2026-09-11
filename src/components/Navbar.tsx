@@ -56,6 +56,8 @@ export function Navbar({ initialAlumno }: NavbarProps) {
   const [alumno, setAlumno] = useState<Alumno | null>(initialAlumno ?? null);
   const [cargando, setCargando] = useState(initialAlumno === undefined);
   const inflight = useRef<Promise<void> | null>(null);
+  const retryTimerRef = useRef<number | null>(null);
+  const retryCountRef = useRef<number>(0);
 
   // Carga el perfil del usuario actual. Si ya hay una carga en curso, espera
   // esa en vez de abrir otra petición paralela.
@@ -70,6 +72,7 @@ export function Navbar({ initialAlumno }: NavbarProps) {
         if (!user) {
           setAlumno(null);
           setCargando(false);
+          retryCountRef.current = 0; // Reset contador
           return;
         }
         const { data } = await withTimeout(
@@ -82,9 +85,47 @@ export function Navbar({ initialAlumno }: NavbarProps) {
         );
         setAlumno(data as Alumno | null);
         setCargando(false);
-      } catch {
-        setAlumno(null);
-        setCargando(false);
+        retryCountRef.current = 0; // Reset contador en éxito
+      } catch (error) {
+        // Distinguir errores transitorios (red, timeout, 502/503/504) de errores
+        // de auth real (401, token inválido). Solo los errores de auth deben
+        // desloguear al usuario; los errores transitorios conservan el último
+        // estado conocido y reintentan UNA SOLA VEZ después de backoff.
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        const isTransient =
+          errorMsg.includes("tiempo límite") ||
+          errorMsg.includes("timeout") ||
+          errorMsg.includes("fetch") ||
+          errorMsg.includes("network") ||
+          errorMsg.includes("502") ||
+          errorMsg.includes("503") ||
+          errorMsg.includes("504") ||
+          errorMsg.includes("Failed to fetch");
+
+        if (isTransient && retryCountRef.current === 0) {
+          // Error transitorio Y es el primer intento: NO desloguear, conservar alumno actual
+          console.warn("[Navbar] Error transitorio al cargar perfil:", errorMsg);
+          setCargando(false);
+          retryCountRef.current = 1; // Marcar que ya hicimos 1 retry
+          // Reintento ÚNICO después de 2-4 segundos (backoff con jitter)
+          const backoff = 2000 + Math.random() * 2000;
+          retryTimerRef.current = window.setTimeout(() => {
+            console.log("[Navbar] Reintentando carga de perfil tras error transitorio (1/1)...");
+            retryTimerRef.current = null;
+            void cargarPerfil();
+          }, backoff);
+        } else if (isTransient && retryCountRef.current > 0) {
+          // Retry también falló con error transitorio: conservar estado, NO desloguear
+          console.warn("[Navbar] Retry falló por error transitorio, conservando sesión actual");
+          setCargando(false);
+          retryCountRef.current = 0; // Reset para próxima carga
+        } else {
+          // Error de auth real (no transitorio): desloguear
+          console.log("[Navbar] Error de autenticación, limpiando sesión:", errorMsg);
+          setAlumno(null);
+          setCargando(false);
+          retryCountRef.current = 0; // Reset contador
+        }
       }
     };
 
@@ -104,6 +145,9 @@ export function Navbar({ initialAlumno }: NavbarProps) {
 
     // Solo reaccionamos a logout/signOut del cliente. Los demás eventos
     // (TOKEN_REFRESHED, INITIALIZED) no deben disparar más peticiones.
+    // NOTA: onAuthStateChange captura SIGNED_IN/SIGNED_OUT automáticamente,
+    // por lo que NO necesitamos el event listener "auth-changed" adicional
+    // (eliminado para evitar duplicación de requests).
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
         setAlumno(null);
@@ -113,23 +157,20 @@ export function Navbar({ initialAlumno }: NavbarProps) {
       }
     });
 
-    // Login/registro desde server actions: una sola recarga, sin refresh
-    // automático del router.
-    const onAuthChanged = () => {
-      void cargarPerfil();
-    };
-    window.addEventListener("auth-changed", onAuthChanged);
-
     return () => {
       sub.subscription.unsubscribe();
-      window.removeEventListener("auth-changed", onAuthChanged);
+      // Cleanup: cancelar retry pendiente si el componente se desmonta
+      if (retryTimerRef.current !== null) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
     };
   }, [supabase, cargarPerfil, initialAlumno]);
 
   async function handleLogout() {
     setAlumno(null);
     await supabase.auth.signOut();
-    window.dispatchEvent(new Event("auth-changed"));
+    // signOut() dispara SIGNED_OUT automáticamente, no necesitamos event custom
     router.push("/login");
   }
 
