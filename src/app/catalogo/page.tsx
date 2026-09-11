@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAlumnoActual } from "@/lib/session";
 import { createServerSupaClient } from "@/lib/supabase-server";
-import { getTalleresConCache, getCategoriasConCache } from "@/lib/cache-catalogo";
 import { CatalogoClient } from "./CatalogoClient";
 import type { Taller, Categoria, Configuracion, Inscripcion } from "@/lib/types";
 
@@ -17,15 +16,23 @@ export default async function CatalogoPage() {
 
   const supabase = createServerSupaClient();
 
-  // Queries con cache (talleres y categorías) + queries específicas de usuario
+  // Queries directas sin cache (volvemos al funcionamiento anterior)
   const [
-    talleres,
-    categorias,
+    { data: talleres },
+    { data: categorias },
     { data: config },
     { data: inscripciones },
   ] = await Promise.all([
-    getTalleresConCache(),
-    getCategoriasConCache(),
+    supabase
+      .from("talleres")
+      .select("id, titulo, descripcion, profesor, aula, categoria, dia, hora_inicio, hora_fin, cupo_max, requiere_materiales")
+      .order("dia", { ascending: true })
+      .order("hora_inicio", { ascending: true }),
+    supabase
+      .from("categorias")
+      .select("id, nombre, orden")
+      .eq("activa", true)
+      .order("orden", { ascending: true }),
     supabase.from("configuracion").select("*").eq("id", 1).single(),
     supabase.from("inscripciones").select("id, taller_id").eq("alumno_id", alumno.id),
   ]);
