@@ -1,11 +1,12 @@
-import { createServerSupaClient } from "@/lib/supabase-server";
+import { createAdminClient } from "@/lib/supabase-server";
 import { AdminHomeClient } from "./AdminHomeClient";
 import type { Taller, Categoria, Configuracion } from "@/lib/types";
 
 export const metadata = { title: "Admin · Semana de Talleres" };
 
 export default async function AdminPage() {
-  const supabase = createServerSupaClient();
+  // Usar cliente admin (service_role) para saltear RLS y ver todas las inscripciones
+  const supabase = createAdminClient();
   const [
     { data: talleres },
     { data: categorias },
