@@ -223,6 +223,26 @@ export interface Database {
           error: string | null;
         }[];
       };
+      inscribirse_taller: {
+        Args: {
+          p_taller_id: string;
+        };
+        Returns: {
+          ok: boolean;
+          mensaje: string;
+          taller_id: string;
+        };
+      };
+      diagnosticar_sobrecupos: {
+        Args: Record<string, never>;
+        Returns: {
+          taller_id: string;
+          titulo: string;
+          cupo_max: number;
+          inscripciones_actuales: number;
+          diferencia: number;
+        }[];
+      };
     };
     Enums: { [key: string]: never };
     CompositeTypes: { [key: string]: never };
