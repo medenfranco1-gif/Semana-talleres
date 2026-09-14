@@ -243,6 +243,13 @@ export interface Database {
           diferencia: number;
         }[];
       };
+      contar_inscriptos_por_taller: {
+        Args: Record<string, never>;
+        Returns: {
+          taller_id: string;
+          total: number;
+        }[];
+      };
     };
     Enums: { [key: string]: never };
     CompositeTypes: { [key: string]: never };

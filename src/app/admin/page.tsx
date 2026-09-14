@@ -27,23 +27,23 @@ export default async function AdminPage() {
   // Usar cliente admin (service_role) para saltear RLS y ver TODAS las inscripciones
   const supabase = createAdminClient();
 
+  // Usar RPC para conteo agrupado en PostgreSQL (evita límite de 1000 filas de PostgREST)
   const [
     { data: talleres },
     { data: categorias },
     { data: config },
-    { data: inscripciones },
+    { data: conteos },
   ] = await Promise.all([
     supabase.from("talleres").select("*").order("dia").order("hora_inicio"),
     supabase.from("categorias").select("*").order("orden"),
     supabase.from("configuracion").select("*").eq("id", 1).single(),
-    supabase.from("inscripciones").select("taller_id"),
+    supabase.rpc("contar_inscriptos_por_taller"),
   ]);
 
-  // Contar inscripciones reales por taller
+  // Construir mapa de conteos desde la RPC
   const conteoMap: Record<string, number> = {};
-  for (const r of inscripciones ?? []) {
-    const tid = (r as { taller_id: string }).taller_id;
-    conteoMap[tid] = (conteoMap[tid] ?? 0) + 1;
+  for (const r of conteos ?? []) {
+    conteoMap[r.taller_id] = r.total;
   }
 
   // Construir datos con inscriptos_reales y excedente
