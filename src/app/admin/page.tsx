@@ -1,17 +1,37 @@
 import { createAdminClient } from "@/lib/supabase-server";
 import { AdminHomeClient } from "./AdminHomeClient";
-import type { Taller, Categoria, Configuracion } from "@/lib/types";
+import type { Categoria, Configuracion } from "@/lib/types";
 
 export const metadata = { title: "Admin · Semana de Talleres" };
 
+export interface TallerAdminData {
+  id: string;
+  titulo: string;
+  descripcion: string;
+  profesor: string;
+  aula: string;
+  categoria: string;
+  dia: 1 | 2 | 3;
+  hora_inicio: string;
+  hora_fin: string;
+  cupo_max: number;
+  activo: boolean;
+  requiere_materiales: boolean;
+  created_at: string;
+  updated_at: string;
+  inscriptos_reales: number;
+  excedente: number;
+}
+
 export default async function AdminPage() {
-  // Usar cliente admin (service_role) para saltear RLS y ver todas las inscripciones
+  // Usar cliente admin (service_role) para saltear RLS y ver TODAS las inscripciones
   const supabase = createAdminClient();
+
   const [
     { data: talleres },
     { data: categorias },
     { data: config },
-    { data: counts },
+    { data: inscripciones },
   ] = await Promise.all([
     supabase.from("talleres").select("*").order("dia").order("hora_inicio"),
     supabase.from("categorias").select("*").order("orden"),
@@ -19,45 +39,40 @@ export default async function AdminPage() {
     supabase.from("inscripciones").select("taller_id"),
   ]);
 
-  const cuposMap: Record<string, number> = {};
-  for (const r of counts ?? []) {
+  // Contar inscripciones reales por taller
+  const conteoMap: Record<string, number> = {};
+  for (const r of inscripciones ?? []) {
     const tid = (r as { taller_id: string }).taller_id;
-    cuposMap[tid] = (cuposMap[tid] ?? 0) + 1;
+    conteoMap[tid] = (conteoMap[tid] ?? 0) + 1;
   }
 
-  const talleresConCupo: Taller[] = (talleres ?? []).map((t) => ({
-    ...(t as Taller),
-    cupo_actual: cuposMap[t.id] ?? 0,
-  }));
-
-  // Ordenar por sobrecupo: 1) con excedentes (mayor primero), 2) llenos, 3) resto
-  const talleresOrdenados = talleresConCupo.sort((a, b) => {
-    const cupoA = a.cupo_actual ?? 0;
-    const cupoB = b.cupo_actual ?? 0;
-    const excedenteA = Math.max(0, cupoA - a.cupo_max);
-    const excedenteB = Math.max(0, cupoB - b.cupo_max);
-    const llenoA = cupoA >= a.cupo_max ? 1 : 0;
-    const llenoB = cupoB >= b.cupo_max ? 1 : 0;
-
-    // Prioridad 1: con excedentes
-    if (excedenteA > 0 && excedenteB === 0) return -1;
-    if (excedenteA === 0 && excedenteB > 0) return 1;
-
-    // Prioridad 2: mayor excedente
-    if (excedenteA !== excedenteB) return excedenteB - excedenteA;
-
-    // Prioridad 3: llenos
-    if (llenoA > llenoB) return -1;
-    if (llenoA < llenoB) return 1;
-
-    // Prioridad 4: día y hora
-    if (a.dia !== b.dia) return a.dia - b.dia;
-    return a.hora_inicio.localeCompare(b.hora_inicio);
+  // Construir datos con inscriptos_reales y excedente
+  const talleresAdmin: TallerAdminData[] = (talleres ?? []).map((t) => {
+    const inscriptos_reales = conteoMap[t.id] ?? 0;
+    const excedente = Math.max(0, inscriptos_reales - t.cupo_max);
+    return {
+      id: t.id,
+      titulo: t.titulo,
+      descripcion: t.descripcion,
+      profesor: t.profesor,
+      aula: t.aula,
+      categoria: t.categoria,
+      dia: t.dia as 1 | 2 | 3,
+      hora_inicio: t.hora_inicio,
+      hora_fin: t.hora_fin,
+      cupo_max: t.cupo_max,
+      activo: t.activo,
+      requiere_materiales: t.requiere_materiales,
+      created_at: t.created_at,
+      updated_at: t.updated_at,
+      inscriptos_reales,
+      excedente,
+    };
   });
 
   return (
     <AdminHomeClient
-      talleres={talleresOrdenados}
+      talleres={talleresAdmin}
       categorias={(categorias ?? []) as Categoria[]}
       config={(config ?? null) as Configuracion | null}
     />

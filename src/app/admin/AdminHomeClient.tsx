@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import type { Taller, Categoria, Configuracion } from "@/lib/types";
+import { useState, useMemo } from "react";
+import type { Categoria, Configuracion } from "@/lib/types";
 import { DIAS, fmtRango } from "@/lib/format";
 import {
   actualizarConfigAction,
@@ -13,19 +13,22 @@ import {
 } from "./actions";
 import { TallerForm } from "./TallerForm";
 import { CategoriaManager } from "./CategoriaManager";
+import type { TallerAdminData } from "./page";
 
 interface Props {
-  talleres: Taller[];
+  talleres: TallerAdminData[];
   categorias: Categoria[];
   config: Configuracion | null;
 }
 
 type Tab = "talleres" | "buscar" | "config" | "categorias";
+type FiltroDia = "todos" | "1" | "2" | "3";
+type OrdenTalleres = "sobrecupo" | "alumnos" | "dia_hora" | "nombre";
 
 export function AdminHomeClient({ talleres, categorias, config }: Props) {
   const [tab, setTab] = useState<Tab>("talleres");
   const [showForm, setShowForm] = useState(false);
-  const [editTaller, setEditTaller] = useState<Taller | null>(null);
+  const [editTaller, setEditTaller] = useState<TallerAdminData | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
 
   return (
@@ -101,15 +104,17 @@ function TalleresTab({
   setEditTaller,
   onMsg,
 }: {
-  talleres: Taller[];
+  talleres: TallerAdminData[];
   categorias: Categoria[];
   showForm: boolean;
   setShowForm: (v: boolean) => void;
-  editTaller: Taller | null;
-  setEditTaller: (v: Taller | null) => void;
+  editTaller: TallerAdminData | null;
+  setEditTaller: (v: TallerAdminData | null) => void;
   onMsg: (m: { ok: boolean; texto: string }) => void;
 }) {
-  const [inscriptosTaller, setInscriptosTaller] = useState<Taller | null>(null);
+  const [filtroDia, setFiltroDia] = useState<FiltroDia>("todos");
+  const [orden, setOrden] = useState<OrdenTalleres>("sobrecupo");
+  const [inscriptosTaller, setInscriptosTaller] = useState<TallerAdminData | null>(null);
   const [inscriptos, setInscriptos] = useState<Array<{
     id: string;
     alumno_id: string;
@@ -123,7 +128,45 @@ function TalleresTab({
   }> | null>(null);
   const [cargandoInscriptos, setCargandoInscriptos] = useState(false);
 
-  async function handleVerInscriptos(t: Taller) {
+  // Filtrar y ordenar client-side (0 requests adicionales)
+  const talleresFiltrados = useMemo(() => {
+    let resultado = [...talleres];
+
+    // Filtro por día
+    if (filtroDia !== "todos") {
+      const diaNum = parseInt(filtroDia) as 1 | 2 | 3;
+      resultado = resultado.filter((t) => t.dia === diaNum);
+    }
+
+    // Orden
+    switch (orden) {
+      case "sobrecupo":
+        resultado.sort((a, b) => {
+          // Mayor excedente primero
+          if (b.excedente !== a.excedente) return b.excedente - a.excedente;
+          // Luego por día y hora
+          if (a.dia !== b.dia) return a.dia - b.dia;
+          return a.hora_inicio.localeCompare(b.hora_inicio);
+        });
+        break;
+      case "alumnos":
+        resultado.sort((a, b) => b.inscriptos_reales - a.inscriptos_reales);
+        break;
+      case "dia_hora":
+        resultado.sort((a, b) => {
+          if (a.dia !== b.dia) return a.dia - b.dia;
+          return a.hora_inicio.localeCompare(b.hora_inicio);
+        });
+        break;
+      case "nombre":
+        resultado.sort((a, b) => a.titulo.localeCompare(b.titulo));
+        break;
+    }
+
+    return resultado;
+  }, [talleres, filtroDia, orden]);
+
+  async function handleVerInscriptos(t: TallerAdminData) {
     setInscriptosTaller(t);
     setCargandoInscriptos(true);
     setInscriptos(null);
@@ -137,7 +180,7 @@ function TalleresTab({
     setCargandoInscriptos(false);
   }
 
-  async function handleToggle(t: Taller) {
+  async function handleToggle(t: TallerAdminData) {
     const res = await toggleTallerActivoAction(t.id, !t.activo);
     onMsg(
       res.ok
@@ -145,7 +188,7 @@ function TalleresTab({
         : { ok: false, texto: res.error ?? "Error" },
     );
   }
-  async function handleDelete(t: Taller) {
+  async function handleDelete(t: TallerAdminData) {
     if (!confirm(`¿Eliminar "${t.titulo}"? Se borrarán sus inscripciones.`)) return;
     const res = await eliminarTallerAction(t.id);
     onMsg(
@@ -159,7 +202,7 @@ function TalleresTab({
     <div>
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold text-slate-800">
-          Talleres ({talleres.length})
+          Talleres ({talleresFiltrados.length} de {talleres.length})
         </h2>
         <button
           onClick={() => {
@@ -170,6 +213,38 @@ function TalleresTab({
         >
           + Nuevo taller
         </button>
+      </div>
+
+      {/* Filtros client-side */}
+      <div className="card mb-4 p-3">
+        <div className="flex flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700">Día:</label>
+            <select
+              value={filtroDia}
+              onChange={(e) => setFiltroDia(e.target.value as FiltroDia)}
+              className="input py-1 px-2 text-sm"
+            >
+              <option value="todos">Todos</option>
+              <option value="1">Día 1</option>
+              <option value="2">Día 2</option>
+              <option value="3">Día 3</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700">Orden:</label>
+            <select
+              value={orden}
+              onChange={(e) => setOrden(e.target.value as OrdenTalleres)}
+              className="input py-1 px-2 text-sm"
+            >
+              <option value="sobrecupo">Mayor sobrecupo</option>
+              <option value="alumnos">Más alumnos</option>
+              <option value="dia_hora">Día y hora</option>
+              <option value="nombre">Nombre</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {showForm && (
@@ -192,17 +267,19 @@ function TalleresTab({
         </div>
       )}
 
-      {talleres.length === 0 ? (
+      {talleresFiltrados.length === 0 ? (
         <div className="card p-6 text-center text-slate-500">
-          No hay talleres cargados.
+          {talleres.length === 0
+            ? "No hay talleres cargados."
+            : "No hay talleres con ese filtro."}
         </div>
       ) : (
         <>
           {/* Vista mobile: cards */}
           <div className="space-y-3 lg:hidden">
-            {talleres.map((t) => {
-              const cupoActual = t.cupo_actual ?? 0;
-              const excedente = Math.max(0, cupoActual - t.cupo_max);
+            {talleresFiltrados.map((t) => {
+              const inscriptos = t.inscriptos_reales;
+              const excedente = t.excedente;
               return (
                 <div key={t.id} className="card p-4">
                   <div className="mb-2 flex items-start justify-between gap-2">
@@ -232,7 +309,7 @@ function TalleresTab({
                     <span>{fmtRango(t.hora_inicio, t.hora_fin)}</span>
                     <span className="badge bg-slate-100">{t.categoria}</span>
                     <span>
-                      {cupoActual}/{t.cupo_max} cupos
+                      {inscriptos}/{t.cupo_max} cupos
                       {excedente > 0 && (
                         <span className="ml-1 text-red-600 font-semibold">
                           +{excedente} excedentes
@@ -306,9 +383,9 @@ function TalleresTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {talleres.map((t) => {
-                    const cupoActual = t.cupo_actual ?? 0;
-                    const excedente = Math.max(0, cupoActual - t.cupo_max);
+                  {talleresFiltrados.map((t) => {
+                    const inscriptos = t.inscriptos_reales;
+                    const excedente = t.excedente;
                     return (
                       <tr key={t.id} className="hover:bg-slate-50">
                         <td className="px-3 py-2">
@@ -336,7 +413,7 @@ function TalleresTab({
                         </td>
                         <td className="px-3 py-2 text-slate-600">
                           <div>
-                            {cupoActual}/{t.cupo_max}
+                            {inscriptos}/{t.cupo_max}
                           </div>
                           {excedente > 0 && (
                             <div className="text-xs text-red-600 font-semibold">
@@ -417,10 +494,10 @@ function TalleresTab({
                   Inscriptos en: {inscriptosTaller.titulo}
                 </h3>
                 <p className="text-sm text-slate-600">
-                  {inscriptosTaller.cupo_actual ?? 0}/{inscriptosTaller.cupo_max} cupos
-                  {(inscriptosTaller.cupo_actual ?? 0) > inscriptosTaller.cupo_max && (
+                  {inscriptosTaller.inscriptos_reales}/{inscriptosTaller.cupo_max} cupos
+                  {inscriptosTaller.inscriptos_reales > inscriptosTaller.cupo_max && (
                     <span className="ml-2 text-red-600 font-semibold">
-                      (+{(inscriptosTaller.cupo_actual ?? 0) - inscriptosTaller.cupo_max} excedentes)
+                      (+{inscriptosTaller.inscriptos_reales - inscriptosTaller.cupo_max} excedentes)
                     </span>
                   )}
                 </p>
