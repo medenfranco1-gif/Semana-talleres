@@ -538,31 +538,29 @@ export async function adminBuscarInscripcionesAlumnoAction(
     return { ok: true, resultados: [] };
   }
 
-  // Para cada alumno, traer sus inscripciones con datos del taller
+  // Para cada alumno, traer TODAS sus inscripciones con datos del taller
+  // Usando SERVICE_ROLE para saltear RLS y evitar límite de 1000 filas
   const resultados = await Promise.all(
     alumnos.map(async (alumno) => {
+      // Query directa por alumno_id específico con JOIN a talleres
       const { data: inscripciones } = await admin
         .from("inscripciones")
         .select(`
           id,
           taller_id,
           fecha_inscripcion,
-          talleres:taller_id (
+          talleres!inner (
             id,
             titulo,
             dia,
             hora_inicio
           )
         `)
-        .eq("alumno_id", alumno.id)
-        .order("fecha_inscripcion", { ascending: true });
+        .eq("alumno_id", alumno.id);
 
-      return {
-        alumno_id: alumno.id,
-        nombre: alumno.nombre,
-        apellido: alumno.apellido,
-        email: alumno.email,
-        inscripciones: (inscripciones ?? []).map((insc) => {
+      // Ordenar por día y hora (client-side, después de traer todas)
+      const inscripcionesOrdenadas = (inscripciones ?? [])
+        .map((insc) => {
           const taller = (insc as any).talleres;
           return {
             id: insc.id,
@@ -572,7 +570,18 @@ export async function adminBuscarInscripcionesAlumnoAction(
             taller_hora_inicio: taller.hora_inicio,
             fecha_inscripcion: insc.fecha_inscripcion,
           };
-        }),
+        })
+        .sort((a, b) => {
+          if (a.taller_dia !== b.taller_dia) return a.taller_dia - b.taller_dia;
+          return a.taller_hora_inicio.localeCompare(b.taller_hora_inicio);
+        });
+
+      return {
+        alumno_id: alumno.id,
+        nombre: alumno.nombre,
+        apellido: alumno.apellido,
+        email: alumno.email,
+        inscripciones: inscripcionesOrdenadas,
       };
     }),
   );
