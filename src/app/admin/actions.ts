@@ -538,17 +538,16 @@ export async function adminBuscarInscripcionesAlumnoAction(
     return { ok: true, resultados: [] };
   }
 
-  // Para cada alumno, traer TODAS sus inscripciones con datos del taller
-  // Usando SERVICE_ROLE para saltear RLS y sin límites
+  // Para cada alumno, traer TODAS sus inscripciones (máximo 2 queries por alumno)
   const resultados = await Promise.all(
     alumnos.map(async (alumno) => {
-      // Primero traer todas las inscripciones del alumno
+      // Query 1: Traer todas las inscripciones del alumno
       const { data: inscripciones, error: errorInsc } = await admin
         .from("inscripciones")
         .select("id, taller_id, fecha_inscripcion")
         .eq("alumno_id", alumno.id);
 
-      if (errorInsc || !inscripciones) {
+      if (errorInsc || !inscripciones || inscripciones.length === 0) {
         return {
           alumno_id: alumno.id,
           nombre: alumno.nombre,
@@ -558,25 +557,32 @@ export async function adminBuscarInscripcionesAlumnoAction(
         };
       }
 
-      // Luego traer los datos de cada taller por separado
-      const inscripcionesConTaller = await Promise.all(
-        inscripciones.map(async (insc) => {
-          const { data: taller } = await admin
-            .from("talleres")
-            .select("id, titulo, dia, hora_inicio")
-            .eq("id", insc.taller_id)
-            .single();
+      // Extraer taller_ids únicos
+      const tallerIds = [...new Set(inscripciones.map(i => i.taller_id))];
 
-          return {
-            id: insc.id,
-            taller_id: insc.taller_id,
-            taller_titulo: taller?.titulo ?? "Taller sin nombre",
-            taller_dia: taller?.dia ?? 1,
-            taller_hora_inicio: taller?.hora_inicio ?? "00:00",
-            fecha_inscripcion: insc.fecha_inscripcion,
-          };
-        })
+      // Query 2: Traer todos los talleres en una sola query
+      const { data: talleres } = await admin
+        .from("talleres")
+        .select("id, titulo, dia, hora_inicio")
+        .in("id", tallerIds);
+
+      // Crear Map para lookup rápido
+      const talleresMap = new Map(
+        (talleres ?? []).map(t => [t.id, t])
       );
+
+      // Merge en memoria
+      const inscripcionesConTaller = inscripciones.map(insc => {
+        const taller = talleresMap.get(insc.taller_id);
+        return {
+          id: insc.id,
+          taller_id: insc.taller_id,
+          taller_titulo: taller?.titulo ?? "Taller sin nombre",
+          taller_dia: taller?.dia ?? 1,
+          taller_hora_inicio: taller?.hora_inicio ?? "00:00",
+          fecha_inscripcion: insc.fecha_inscripcion,
+        };
+      });
 
       // Ordenar por día y hora
       inscripcionesConTaller.sort((a, b) => {
