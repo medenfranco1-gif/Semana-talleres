@@ -539,19 +539,34 @@ export async function adminBuscarInscripcionesAlumnoAction(
   }
 
   // Para cada alumno, traer TODAS sus inscripciones con datos del taller
-  // Usando SERVICE_ROLE para saltear RLS y evitar límite de 1000 filas
+  // Usando SERVICE_ROLE para saltear RLS y sin límites
   const resultados = await Promise.all(
     alumnos.map(async (alumno) => {
-      // Query directa por alumno_id específico con JOIN a talleres
-      const { data: inscripciones } = await admin
+      // Primero traer todas las inscripciones del alumno
+      const { data: inscripciones, error: errorInsc } = await admin
         .from("inscripciones")
-        .select("id, taller_id, fecha_inscripcion, talleres(id, titulo, dia, hora_inicio)")
+        .select("id, taller_id, fecha_inscripcion")
         .eq("alumno_id", alumno.id);
 
-      // Ordenar por día y hora (client-side, después de traer todas)
-      const inscripcionesOrdenadas = (inscripciones ?? [])
-        .map((insc) => {
-          const taller = (insc as any).talleres;
+      if (errorInsc || !inscripciones) {
+        return {
+          alumno_id: alumno.id,
+          nombre: alumno.nombre,
+          apellido: alumno.apellido,
+          email: alumno.email,
+          inscripciones: [],
+        };
+      }
+
+      // Luego traer los datos de cada taller por separado
+      const inscripcionesConTaller = await Promise.all(
+        inscripciones.map(async (insc) => {
+          const { data: taller } = await admin
+            .from("talleres")
+            .select("id, titulo, dia, hora_inicio")
+            .eq("id", insc.taller_id)
+            .single();
+
           return {
             id: insc.id,
             taller_id: insc.taller_id,
@@ -561,17 +576,20 @@ export async function adminBuscarInscripcionesAlumnoAction(
             fecha_inscripcion: insc.fecha_inscripcion,
           };
         })
-        .sort((a, b) => {
-          if (a.taller_dia !== b.taller_dia) return a.taller_dia - b.taller_dia;
-          return a.taller_hora_inicio.localeCompare(b.taller_hora_inicio);
-        });
+      );
+
+      // Ordenar por día y hora
+      inscripcionesConTaller.sort((a, b) => {
+        if (a.taller_dia !== b.taller_dia) return a.taller_dia - b.taller_dia;
+        return a.taller_hora_inicio.localeCompare(b.taller_hora_inicio);
+      });
 
       return {
         alumno_id: alumno.id,
         nombre: alumno.nombre,
         apellido: alumno.apellido,
         email: alumno.email,
-        inscripciones: inscripcionesOrdenadas,
+        inscripciones: inscripcionesConTaller,
       };
     }),
   );
