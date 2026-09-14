@@ -8,6 +8,8 @@ import {
   toggleTallerActivoAction,
   eliminarTallerAction,
   asignarPendientesAction,
+  adminVerInscriptosAction,
+  adminBuscarInscripcionesAlumnoAction,
 } from "./actions";
 import { TallerForm } from "./TallerForm";
 import { CategoriaManager } from "./CategoriaManager";
@@ -18,7 +20,7 @@ interface Props {
   config: Configuracion | null;
 }
 
-type Tab = "talleres" | "config" | "categorias";
+type Tab = "talleres" | "buscar" | "config" | "categorias";
 
 export function AdminHomeClient({ talleres, categorias, config }: Props) {
   const [tab, setTab] = useState<Tab>("talleres");
@@ -33,6 +35,7 @@ export function AdminHomeClient({ talleres, categorias, config }: Props) {
         {(
           [
             { k: "talleres", label: "Talleres" },
+            { k: "buscar", label: "Buscar alumno" },
             { k: "config", label: "Inscripciones" },
             { k: "categorias", label: "Categorías" },
           ] as { k: Tab; label: string }[]
@@ -75,6 +78,8 @@ export function AdminHomeClient({ talleres, categorias, config }: Props) {
         />
       )}
 
+      {tab === "buscar" && <BuscarAlumnoTab />}
+
       {tab === "config" && (
         <ConfigTab config={config} onMsg={setMsg} />
       )}
@@ -104,6 +109,34 @@ function TalleresTab({
   setEditTaller: (v: Taller | null) => void;
   onMsg: (m: { ok: boolean; texto: string }) => void;
 }) {
+  const [inscriptosTaller, setInscriptosTaller] = useState<Taller | null>(null);
+  const [inscriptos, setInscriptos] = useState<Array<{
+    id: string;
+    alumno_id: string;
+    nombre: string;
+    apellido: string;
+    email: string;
+    curso: string;
+    division: string;
+    fecha_inscripcion: string;
+    dentro_cupo: boolean;
+  }> | null>(null);
+  const [cargandoInscriptos, setCargandoInscriptos] = useState(false);
+
+  async function handleVerInscriptos(t: Taller) {
+    setInscriptosTaller(t);
+    setCargandoInscriptos(true);
+    setInscriptos(null);
+
+    const res = await adminVerInscriptosAction(t.id);
+    if (res.ok && res.inscriptos) {
+      setInscriptos(res.inscriptos);
+    } else {
+      onMsg({ ok: false, texto: res.error ?? "Error al cargar inscriptos" });
+    }
+    setCargandoInscriptos(false);
+  }
+
   async function handleToggle(t: Taller) {
     const res = await toggleTallerActivoAction(t.id, !t.activo);
     onMsg(
@@ -169,6 +202,7 @@ function TalleresTab({
           <div className="space-y-3 lg:hidden">
             {talleres.map((t) => {
               const cupoActual = t.cupo_actual ?? 0;
+              const excedente = Math.max(0, cupoActual - t.cupo_max);
               return (
                 <div key={t.id} className="card p-4">
                   <div className="mb-2 flex items-start justify-between gap-2">
@@ -199,6 +233,11 @@ function TalleresTab({
                     <span className="badge bg-slate-100">{t.categoria}</span>
                     <span>
                       {cupoActual}/{t.cupo_max} cupos
+                      {excedente > 0 && (
+                        <span className="ml-1 text-red-600 font-semibold">
+                          +{excedente} excedentes
+                        </span>
+                      )}
                     </span>
                     {!t.requiere_materiales && (
                       <span className="badge bg-amber-100 text-amber-700">
@@ -208,6 +247,12 @@ function TalleresTab({
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleVerInscriptos(t)}
+                      className="btn-primary flex-1 px-3 py-1.5 text-xs"
+                    >
+                      Ver inscriptos
+                    </button>
                     <button
                       onClick={() => {
                         setEditTaller(t);
@@ -263,6 +308,7 @@ function TalleresTab({
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {talleres.map((t) => {
                     const cupoActual = t.cupo_actual ?? 0;
+                    const excedente = Math.max(0, cupoActual - t.cupo_max);
                     return (
                       <tr key={t.id} className="hover:bg-slate-50">
                         <td className="px-3 py-2">
@@ -289,7 +335,14 @@ function TalleresTab({
                           )}
                         </td>
                         <td className="px-3 py-2 text-slate-600">
-                          {cupoActual}/{t.cupo_max}
+                          <div>
+                            {cupoActual}/{t.cupo_max}
+                          </div>
+                          {excedente > 0 && (
+                            <div className="text-xs text-red-600 font-semibold">
+                              +{excedente} exced.
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           <button
@@ -305,6 +358,12 @@ function TalleresTab({
                         </td>
                         <td className="px-3 py-2 text-right">
                           <div className="flex flex-wrap justify-end gap-1">
+                            <button
+                              onClick={() => handleVerInscriptos(t)}
+                              className="btn-primary px-2 py-1 text-xs"
+                            >
+                              Ver inscriptos
+                            </button>
                             <button
                               onClick={() => {
                                 setEditTaller(t);
@@ -346,6 +405,88 @@ function TalleresTab({
             </div>
           </div>
         </>
+      )}
+
+      {/* Modal de inscriptos */}
+      {inscriptosTaller && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="card max-h-[90vh] w-full max-w-4xl overflow-hidden flex flex-col">
+            <div className="border-b border-slate-200 p-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Inscriptos en: {inscriptosTaller.titulo}
+                </h3>
+                <p className="text-sm text-slate-600">
+                  {inscriptosTaller.cupo_actual ?? 0}/{inscriptosTaller.cupo_max} cupos
+                  {(inscriptosTaller.cupo_actual ?? 0) > inscriptosTaller.cupo_max && (
+                    <span className="ml-2 text-red-600 font-semibold">
+                      (+{(inscriptosTaller.cupo_actual ?? 0) - inscriptosTaller.cupo_max} excedentes)
+                    </span>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setInscriptosTaller(null);
+                  setInscriptos(null);
+                }}
+                className="btn-secondary px-3 py-1"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {cargandoInscriptos ? (
+                <div className="text-center py-8 text-slate-500">
+                  Cargando inscriptos...
+                </div>
+              ) : !inscriptos || inscriptos.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  No hay inscriptos en este taller.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {inscriptos.map((insc, idx) => (
+                    <div
+                      key={insc.id}
+                      className={`border rounded-md p-3 ${
+                        insc.dentro_cupo
+                          ? "border-green-200 bg-green-50"
+                          : "border-red-200 bg-red-50"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <div className="font-medium text-slate-900">
+                            {idx + 1}. {insc.nombre} {insc.apellido}
+                          </div>
+                          <div className="text-sm text-slate-600">
+                            {insc.email}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            {insc.curso} {insc.division} · Inscripto: {new Date(insc.fecha_inscripcion).toLocaleString("es-AR")}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {insc.dentro_cupo ? (
+                            <span className="badge bg-green-100 text-green-700">
+                              DENTRO DEL CUPO
+                            </span>
+                          ) : (
+                            <span className="badge bg-red-100 text-red-700">
+                              EXCEDENTE
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -603,5 +744,120 @@ function Toggle({
         }`}
       />
     </button>
+  );
+}
+
+// ---------- tab buscar alumno ----------
+function BuscarAlumnoTab() {
+  const [query, setQuery] = useState("");
+  const [resultados, setResultados] = useState<Array<{
+    alumno_id: string;
+    nombre: string;
+    apellido: string;
+    email: string;
+    inscripciones: Array<{
+      id: string;
+      taller_id: string;
+      taller_titulo: string;
+      taller_dia: number;
+      taller_hora_inicio: string;
+      fecha_inscripcion: string;
+    }>;
+  }> | null>(null);
+  const [buscando, setBuscando] = useState(false);
+
+  async function handleBuscar() {
+    if (!query || query.trim().length < 2) {
+      setResultados([]);
+      return;
+    }
+
+    setBuscando(true);
+    const res = await adminBuscarInscripcionesAlumnoAction(query);
+    if (res.ok && res.resultados) {
+      setResultados(res.resultados);
+    }
+    setBuscando(false);
+  }
+
+  return (
+    <div className="card p-4">
+      <h2 className="mb-4 text-lg font-semibold text-slate-800">
+        Buscar inscripciones de alumno
+      </h2>
+
+      <div className="mb-4 flex gap-2">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
+          placeholder="Nombre, apellido o email..."
+          className="input flex-1"
+        />
+        <button
+          onClick={handleBuscar}
+          disabled={buscando}
+          className="btn-primary px-4"
+        >
+          {buscando ? "Buscando..." : "Buscar"}
+        </button>
+      </div>
+
+      {resultados === null ? (
+        <div className="text-center py-8 text-slate-500">
+          Ingresá al menos 2 caracteres para buscar.
+        </div>
+      ) : resultados.length === 0 ? (
+        <div className="text-center py-8 text-slate-500">
+          No se encontraron alumnos.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {resultados.map((alumno) => (
+            <div key={alumno.alumno_id} className="border border-slate-200 rounded-md p-4">
+              <div className="mb-3">
+                <h3 className="font-semibold text-slate-900">
+                  {alumno.nombre} {alumno.apellido}
+                </h3>
+                <p className="text-sm text-slate-600">{alumno.email}</p>
+              </div>
+
+              {alumno.inscripciones.length === 0 ? (
+                <p className="text-sm text-slate-500 italic">
+                  No tiene inscripciones.
+                </p>
+              ) : (
+                <div>
+                  <p className="text-sm font-medium text-slate-700 mb-2">
+                    Inscripciones ({alumno.inscripciones.length}):
+                  </p>
+                  <div className="space-y-1">
+                    {alumno.inscripciones.map((insc) => (
+                      <div
+                        key={insc.id}
+                        className="flex items-center justify-between text-sm bg-slate-50 rounded px-3 py-2"
+                      >
+                        <div>
+                          <span className="font-medium text-slate-900">
+                            {insc.taller_titulo}
+                          </span>
+                          <span className="text-slate-600 ml-2">
+                            {DIAS.find((d) => d.n === insc.taller_dia)?.label} {insc.taller_hora_inicio}
+                          </span>
+                        </div>
+                        <span className="text-xs text-slate-500">
+                          {new Date(insc.fecha_inscripcion).toLocaleDateString("es-AR")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -411,3 +411,171 @@ export async function adminBorrarAlumnoAction(
   revalidatePath("/admin");
   return { ok: true };
 }
+
+/**
+ * Carga los inscriptos de un taller específico (lazy loading).
+ * Usa SERVICE_ROLE para saltar RLS y ver todos los alumnos.
+ * Solo admin.
+ */
+export async function adminVerInscriptosAction(
+  tallerId: string,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  inscriptos?: Array<{
+    id: string;
+    alumno_id: string;
+    nombre: string;
+    apellido: string;
+    email: string;
+    curso: string;
+    division: string;
+    fecha_inscripcion: string;
+    dentro_cupo: boolean;
+  }>;
+}> {
+  await requireAdmin();
+  const admin = createAdminClient();
+
+  // Obtener taller para saber cupo_max
+  const { data: taller, error: errorTaller } = await admin
+    .from("talleres")
+    .select("cupo_max")
+    .eq("id", tallerId)
+    .single();
+
+  if (errorTaller || !taller) {
+    return { ok: false, error: "Taller no encontrado." };
+  }
+
+  // Obtener inscripciones con datos del alumno, ordenadas por fecha
+  const { data: inscripciones, error: errorInscripciones } = await admin
+    .from("inscripciones")
+    .select(`
+      id,
+      alumno_id,
+      fecha_inscripcion,
+      alumnos:alumno_id (
+        id,
+        nombre,
+        apellido,
+        email,
+        curso,
+        division
+      )
+    `)
+    .eq("taller_id", tallerId)
+    .order("fecha_inscripcion", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (errorInscripciones) {
+    return { ok: false, error: errorInscripciones.message };
+  }
+
+  // Marcar los primeros cupo_max como "dentro del cupo", el resto como "excedente"
+  const inscriptos = (inscripciones ?? []).map((insc, idx) => {
+    const alumno = (insc as any).alumnos;
+    return {
+      id: insc.id,
+      alumno_id: insc.alumno_id,
+      nombre: alumno.nombre,
+      apellido: alumno.apellido,
+      email: alumno.email,
+      curso: alumno.curso,
+      division: alumno.division,
+      fecha_inscripcion: insc.fecha_inscripcion,
+      dentro_cupo: idx < taller.cupo_max,
+    };
+  });
+
+  return { ok: true, inscriptos };
+}
+
+/**
+ * Busca todas las inscripciones de un alumno por nombre/email.
+ * Usa SERVICE_ROLE para saltar RLS y ver TODAS las inscripciones reales.
+ * Solo admin.
+ */
+export async function adminBuscarInscripcionesAlumnoAction(
+  query: string,
+): Promise<{
+  ok: boolean;
+  error?: string;
+  resultados?: Array<{
+    alumno_id: string;
+    nombre: string;
+    apellido: string;
+    email: string;
+    inscripciones: Array<{
+      id: string;
+      taller_id: string;
+      taller_titulo: string;
+      taller_dia: number;
+      taller_hora_inicio: string;
+      fecha_inscripcion: string;
+    }>;
+  }>;
+}> {
+  await requireAdmin();
+  const admin = createAdminClient();
+
+  if (!query || query.trim().length < 2) {
+    return { ok: true, resultados: [] };
+  }
+
+  // Buscar alumnos por nombre, apellido o email
+  const { data: alumnos, error: errorAlumnos } = await admin
+    .from("alumnos")
+    .select("id, nombre, apellido, email")
+    .or(`nombre.ilike.%${query}%,apellido.ilike.%${query}%,email.ilike.%${query}%`)
+    .limit(20);
+
+  if (errorAlumnos) {
+    return { ok: false, error: errorAlumnos.message };
+  }
+
+  if (!alumnos || alumnos.length === 0) {
+    return { ok: true, resultados: [] };
+  }
+
+  // Para cada alumno, traer sus inscripciones con datos del taller
+  const resultados = await Promise.all(
+    alumnos.map(async (alumno) => {
+      const { data: inscripciones } = await admin
+        .from("inscripciones")
+        .select(`
+          id,
+          taller_id,
+          fecha_inscripcion,
+          talleres:taller_id (
+            id,
+            titulo,
+            dia,
+            hora_inicio
+          )
+        `)
+        .eq("alumno_id", alumno.id)
+        .order("fecha_inscripcion", { ascending: true });
+
+      return {
+        alumno_id: alumno.id,
+        nombre: alumno.nombre,
+        apellido: alumno.apellido,
+        email: alumno.email,
+        inscripciones: (inscripciones ?? []).map((insc) => {
+          const taller = (insc as any).talleres;
+          return {
+            id: insc.id,
+            taller_id: insc.taller_id,
+            taller_titulo: taller.titulo,
+            taller_dia: taller.dia,
+            taller_hora_inicio: taller.hora_inicio,
+            fecha_inscripcion: insc.fecha_inscripcion,
+          };
+        }),
+      };
+    }),
+  );
+
+  return { ok: true, resultados };
+}

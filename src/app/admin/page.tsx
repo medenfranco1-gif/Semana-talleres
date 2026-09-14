@@ -30,9 +30,34 @@ export default async function AdminPage() {
     cupo_actual: cuposMap[t.id] ?? 0,
   }));
 
+  // Ordenar por sobrecupo: 1) con excedentes (mayor primero), 2) llenos, 3) resto
+  const talleresOrdenados = talleresConCupo.sort((a, b) => {
+    const cupoA = a.cupo_actual ?? 0;
+    const cupoB = b.cupo_actual ?? 0;
+    const excedenteA = Math.max(0, cupoA - a.cupo_max);
+    const excedenteB = Math.max(0, cupoB - b.cupo_max);
+    const llenoA = cupoA >= a.cupo_max ? 1 : 0;
+    const llenoB = cupoB >= b.cupo_max ? 1 : 0;
+
+    // Prioridad 1: con excedentes
+    if (excedenteA > 0 && excedenteB === 0) return -1;
+    if (excedenteA === 0 && excedenteB > 0) return 1;
+
+    // Prioridad 2: mayor excedente
+    if (excedenteA !== excedenteB) return excedenteB - excedenteA;
+
+    // Prioridad 3: llenos
+    if (llenoA > llenoB) return -1;
+    if (llenoA < llenoB) return 1;
+
+    // Prioridad 4: día y hora
+    if (a.dia !== b.dia) return a.dia - b.dia;
+    return a.hora_inicio.localeCompare(b.hora_inicio);
+  });
+
   return (
     <AdminHomeClient
-      talleres={talleresConCupo}
+      talleres={talleresOrdenados}
       categorias={(categorias ?? []) as Categoria[]}
       config={(config ?? null) as Configuracion | null}
     />
