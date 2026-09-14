@@ -545,17 +545,7 @@ export async function adminBuscarInscripcionesAlumnoAction(
       // Query directa por alumno_id específico con JOIN a talleres
       const { data: inscripciones } = await admin
         .from("inscripciones")
-        .select(`
-          id,
-          taller_id,
-          fecha_inscripcion,
-          talleres!inner (
-            id,
-            titulo,
-            dia,
-            hora_inicio
-          )
-        `)
+        .select("id, taller_id, fecha_inscripcion, talleres(id, titulo, dia, hora_inicio)")
         .eq("alumno_id", alumno.id);
 
       // Ordenar por día y hora (client-side, después de traer todas)
@@ -565,9 +555,9 @@ export async function adminBuscarInscripcionesAlumnoAction(
           return {
             id: insc.id,
             taller_id: insc.taller_id,
-            taller_titulo: taller.titulo,
-            taller_dia: taller.dia,
-            taller_hora_inicio: taller.hora_inicio,
+            taller_titulo: taller?.titulo ?? "Taller sin nombre",
+            taller_dia: taller?.dia ?? 1,
+            taller_hora_inicio: taller?.hora_inicio ?? "00:00",
             fecha_inscripcion: insc.fecha_inscripcion,
           };
         })
