@@ -95,34 +95,10 @@ export function evaluarBloqueoCliente(
     return { tipo: "solapamiento" };
   }
 
-  // Solo Cocina y Deportes tienen límite semanal:
-  // máximo 2 talleres de cada categoría por semana.
+
   const catNorm = taller.categoria.trim().toLowerCase();
 
-  if (catNorm === "cocina" || catNorm === "deportes") {
-    const count = inscriptos.filter(
-      (t) => t.categoria.trim().toLowerCase() === catNorm,
-    ).length;
 
-    if (count >= 2) {
-      return {
-        tipo: "limitecatssemana",
-        categoria: taller.categoria,
-      };
-    }
-  }
-
-  // Solo Cocina y Deportes tienen límite por día:
-  // máximo 1 taller de esa categoría por día.
-  if (catNorm === "cocina" || catNorm === "deportes") {
-    const mismaCat = inscriptosDia.some(
-      (t) => t.categoria.trim().toLowerCase() === catNorm,
-    );
-
-    if (mismaCat) {
-      return { tipo: "mismacategoria" };
-    }
-  }
 
   return null;
 }
