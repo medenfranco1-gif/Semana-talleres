@@ -28,93 +28,130 @@ export function evaluarBloqueoCliente(
   } | null,
   yaInscriptoIds: Set<string>,
 ): MotivoBloqueo {
-  // ya inscripto
+  // Ya inscripto
   if (yaInscriptoIds.has(taller.id)) {
     return { tipo: "yainscripto" };
   }
 
-  // cupo lleno
+  // Cupo lleno
   const cupoActual = taller.cupo_actual ?? 0;
   if (cupoActual >= taller.cupo_max) {
     return { tipo: "cupolleno" };
   }
 
-  // inscripciones abiertas
+  // Inscripciones abiertas
   if (config) {
-    if (!config.inscripciones_abiertas_global) return { tipo: "noabierto" };
+    if (!config.inscripciones_abiertas_global) {
+      return { tipo: "noabierto" };
+    }
+
     const diaAbierto =
       taller.dia === 1
         ? config.inscripciones_abiertas_dia1
         : taller.dia === 2
           ? config.inscripciones_abiertas_dia2
           : config.inscripciones_abiertas_dia3;
-    if (!diaAbierto) return { tipo: "noabierto" };
+
+    if (!diaAbierto) {
+      return { tipo: "noabierto" };
+    }
   }
 
-  // talleres en los que el alumno ya está inscripto (cualquier día)
+  // Talleres en los que el alumno ya está inscripto
+  // (cualquier día de la semana)
   const inscriptos = inscripciones
     .map((i) => talleresMap[i.taller_id])
     .filter((t): t is Taller => !!t && t.id !== taller.id);
 
-  // mismo taller repetido en otro día de la semana (compara por título,
-  // igual que el trigger backend `alumno_tiene_taller_en_semana`)
+  // No permitir repetir el mismo taller en otro día
+  // durante la misma semana.
   const tituloNorm = taller.titulo.trim().toLowerCase();
+
   const mismoTallerSemana = inscriptos.some(
     (t) => t.titulo.trim().toLowerCase() === tituloNorm,
   );
-  if (mismoTallerSemana) return { tipo: "mismotallersemana" };
 
-  // inscriptos del alumno ese mismo día
-  const inscriptosDia = inscriptos.filter((t) => t.dia === taller.dia);
+  if (mismoTallerSemana) {
+    return { tipo: "mismotallersemana" };
+  }
 
-  // solapamiento horario
+  // Inscripciones del alumno ese mismo día
+  const inscriptosDia = inscriptos.filter(
+    (t) => t.dia === taller.dia,
+  );
+
+  // No permitir superposición de horarios
   const haySolape = inscriptosDia.some(
     (t) =>
-      seSolapan(taller.hora_inicio, taller.hora_fin, t.hora_inicio, t.hora_fin),
+      seSolapan(
+        taller.hora_inicio,
+        taller.hora_fin,
+        t.hora_inicio,
+        t.hora_fin,
+      ),
   );
-  if (haySolape) return { tipo: "solapamiento" };
 
-  // LÍMITE SEMANAL POR CATEGORÍA: máx 2 de Cocina y 2 de Deportes en toda la
-  // semana (suma los 3 días). Espeja el chequeo del trigger backend
-  // `alumno_count_categoria_semana`. Si el alumno ya tiene 2 de la categoría
-  // y el taller nuevo es de esa categoría, se bloquea (aunque sea otro día).
-  // Importante: este límite es por SEMANA, no por día; por eso contamos sobre
-  // `inscriptos` (todos los días) y no sobre `inscriptosDia`.
+  if (haySolape) {
+    return { tipo: "solapamiento" };
+  }
+
+  // Solo Cocina y Deportes tienen límite semanal:
+  // máximo 2 talleres de cada categoría por semana.
   const catNorm = taller.categoria.trim().toLowerCase();
+
   if (catNorm === "cocina" || catNorm === "deportes") {
     const count = inscriptos.filter(
       (t) => t.categoria.trim().toLowerCase() === catNorm,
     ).length;
+
     if (count >= 2) {
-      return { tipo: "limitecatssemana", categoria: taller.categoria };
+      return {
+        tipo: "limitecatssemana",
+        categoria: taller.categoria,
+      };
     }
   }
 
-  // Solo Cocina y Deportes tienen límite de categoría por día.
-if (catNorm === "cocina" || catNorm === "deportes") {
-  const mismaCat = inscriptosDia.some(
-    (t) => t.categoria.trim().toLowerCase() === catNorm,
-  );
+  // Solo Cocina y Deportes tienen límite por día:
+  // máximo 1 taller de esa categoría por día.
+  if (catNorm === "cocina" || catNorm === "deportes") {
+    const mismaCat = inscriptosDia.some(
+      (t) => t.categoria.trim().toLowerCase() === catNorm,
+    );
 
-  if (mismaCat) return { tipo: "mismacategoria" };
+    if (mismaCat) {
+      return { tipo: "mismacategoria" };
+    }
+  }
+
+  return null;
 }
 
 export function textoMotivo(m: MotivoBloqueo): string {
   switch (m?.tipo) {
     case "cupolleno":
       return "Cupo completo";
+
     case "solapamiento":
       return "Se superpone con otro taller ese día";
+
     case "mismacategoria":
       return "Ya tenés un taller de esa categoría ese día";
+
     case "mismotallersemana":
       return "Ya estás anotado a este taller esta semana";
+
     case "limitecatssemana":
-      return `Alcanzaste el máximo de 2 talleres de ${m?.categoria ?? "esa categoría"} en la semana`;
+      return `Alcanzaste el máximo de 2 talleres de ${
+        m?.categoria ?? "esa categoría"
+      } en la semana`;
+
     case "yainscripto":
       return "Ya estás inscripto";
+
     case "noabierto":
       return "Inscripciones cerradas";
+
     default:
       return "";
   }
