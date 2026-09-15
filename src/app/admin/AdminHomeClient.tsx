@@ -9,11 +9,9 @@ import {
   eliminarTallerAction,
   asignarPendientesAction,
   adminVerInscriptosAction,
-  adminBuscarInscripcionesAlumnoAction,
-  adminVerInscriptosAction,
-  adminBuscarInscripcionesAlumnoAction,
-  adminDarBajaAction,
-  adminCambiarTallerAction,
+adminBuscarInscripcionesAlumnoAction,
+adminDarBajaAction,
+adminCambiarTallerAction,
 } from "./actions";
 import { TallerForm } from "./TallerForm";
 import { CategoriaManager } from "./CategoriaManager";
