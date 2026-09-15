@@ -85,7 +85,7 @@ export function AdminHomeClient({ talleres, categorias, config }: Props) {
         />
       )}
 
-      {tab === "buscar" && <BuscarAlumnoTab />}
+      {tab === "buscar" && <BuscarAlumnoTab talleres={talleres} />}
 
       {tab === "config" && (
         <ConfigTab config={config} onMsg={setMsg} />
