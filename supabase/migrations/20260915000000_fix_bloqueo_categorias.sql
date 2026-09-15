@@ -1,110 +1,162 @@
--- FIX: límite de categoría SOLO para Cocina y Deportes
+import { seSolapan } from "./format";
+import type { Taller, Inscripcion } from "./types";
 
-create or replace function public.validar_cupo_atomico()
-returns trigger
-language plpgsql
-as $$
-declare
-v_taller record;
-v_cupo_actual integer;
-v_abierto_global boolean;
-v_abierto_dia boolean;
-begin
--- Obtener el taller y bloquearlo mientras se valida el cupo.
-select id, dia, hora_inicio, hora_fin, categoria, cupo_max, activo
-into v_taller
-from public.talleres
-where id = new.taller_id
-for update;
+export type MotivoBloqueo =
+| { tipo: "cupolleno" }
+| { tipo: "solapamiento" }
+| { tipo: "mismacategoria" }
+| { tipo: "yainscripto" }
+| { tipo: "mismotallersemana" }
+| { tipo: "limitecatssemana"; categoria: string }
+| { tipo: "noabierto" }
+| null;
 
-if not found then
-raise exception 'El taller no existe.';
-end if;
+/**
+* Validación PREVIA en cliente para UX (deshabilitar botón + mostrar motivo).
+* Es solo informativa: la validación real e inapelable la hace el trigger
+* backend. Si el cliente y el backend discrepan, gana el backend.
+*/
+export function evaluarBloqueoCliente(
+taller: Taller,
+inscripciones: Inscripcion[],
+talleresMap: Record<string, Taller>,
+config: {
+inscripciones_abiertas_global: boolean;
+inscripciones_abiertas_dia1: boolean;
+inscripciones_abiertas_dia2: boolean;
+inscripciones_abiertas_dia3: boolean;
+} | null,
+yaInscriptoIds: Set<string>,
+): MotivoBloqueo {
+// Ya inscripto
+if (yaInscriptoIds.has(taller.id)) {
+return { tipo: "yainscripto" };
+}
 
-if not v_taller.activo then
-raise exception 'El taller no está disponible para inscripción.';
-end if;
+// Cupo lleno
+const cupoActual = taller.cupo_actual ?? 0;
+if (cupoActual >= taller.cupo_max) {
+return { tipo: "cupolleno" };
+}
 
--- Verificar cupo.
-select count(*) into v_cupo_actual
-from public.inscripciones
-where taller_id = new.taller_id
-and id != coalesce(
-new.id,
-'00000000-0000-0000-0000-000000000000'::uuid
+// Inscripciones abiertas
+if (config) {
+if (!config.inscripciones_abiertas_global) {
+return { tipo: "noabierto" };
+}
+
+const diaAbierto =
+taller.dia === 1
+? config.inscripciones_abiertas_dia1
+: taller.dia === 2
+? config.inscripciones_abiertas_dia2
+: config.inscripciones_abiertas_dia3;
+
+if (!diaAbierto) {
+return { tipo: "noabierto" };
+}
+}
+
+// Talleres en los que el alumno ya está inscripto (cualquier día)
+const inscriptos = inscripciones
+.map((i) => talleresMap[i.taller_id])
+.filter((t): t is Taller => !!t && t.id !== taller.id);
+
+// Mismo taller repetido en otro día de la semana
+// (compara por título, igual que el trigger backend)
+const tituloNorm = taller.titulo.trim().toLowerCase();
+
+const mismoTallerSemana = inscriptos.some(
+(t) => t.titulo.trim().toLowerCase() === tituloNorm,
 );
 
-if v_cupo_actual >= v_taller.cupo_max then
-raise exception 'El taller alcanzó el cupo máximo (%). Actualmente hay % inscriptos.',
-v_taller.cupo_max, v_cupo_actual;
-end if;
+if (mismoTallerSemana) {
+return { tipo: "mismotallersemana" };
+}
 
--- Solapamiento horario: sigue aplicando a TODAS las categorías.
-if public.alumno_tiene_sopa_en_dia(new.alumno_id, new.taller_id) then
-raise exception 'Ya tenés un taller inscripto en esa franja horaria el mismo día.';
-end if;
+// Inscriptos del alumno ese mismo día
+const inscriptosDia = inscriptos.filter(
+(t) => t.dia === taller.dia,
+);
 
--- MISMA CATEGORÍA EN EL MISMO DÍA:
--- SOLO Cocina y Deportes tienen esta restricción.
-if lower(btrim(v_taller.categoria)) in ('cocina', 'deportes')
-and public.alumno_tiene_categoria_dia(new.alumno_id, new.taller_id) then
-raise exception 'Ya tenés un taller de la categoría "%" inscripto ese día.',
-v_taller.categoria;
-end if;
+// Solapamiento horario
+const haySolape = inscriptosDia.some(
+(t) =>
+seSolapan(
+taller.hora_inicio,
+taller.hora_fin,
+t.hora_inicio,
+t.hora_fin,
+),
+);
 
--- El mismo taller no se puede repetir en otro día.
-if public.alumno_tiene_taller_en_semana(new.alumno_id, new.taller_id) then
-raise exception 'Ya estás anotado a este taller en otro día de la semana.';
-end if;
+if (haySolape) {
+return { tipo: "solapamiento" };
+}
 
--- LÍMITE SEMANAL:
--- SOLO Cocina y Deportes.
-if lower(btrim(v_taller.categoria)) = 'cocina'
-and public.alumno_count_categoria_semana(new.alumno_id, 'cocina') >= 2 then
-raise exception 'Ya tenés 2 talleres de Cocina anotados en la semana (límite alcanzado).';
-end if;
+// LÍMITE SEMANAL POR CATEGORÍA:
+// máximo 2 de Cocina y máximo 2 de Deportes por semana.
+// Las demás categorías NO tienen límite semanal.
+const catNorm = taller.categoria.trim().toLowerCase();
 
-if lower(btrim(v_taller.categoria)) = 'deportes'
-and public.alumno_count_categoria_semana(new.alumno_id, 'deportes') >= 2 then
-raise exception 'Ya tenés 2 talleres de Deportes anotados en la semana (límite alcanzado).';
-end if;
+if (catNorm === "cocina" || catNorm === "deportes") {
+const count = inscriptos.filter(
+(t) => t.categoria.trim().toLowerCase() === catNorm,
+).length;
 
--- Inscripciones abiertas.
-select c.inscripciones_abiertas_global,
-case v_taller.dia
-when 1 then c.inscripciones_abiertas_dia1
-when 2 then c.inscripciones_abiertas_dia2
-when 3 then c.inscripciones_abiertas_dia3
-end
-into v_abierto_global, v_abierto_dia
-from public.configuracion c
-where c.id = 1;
+if (count >= 2) {
+return {
+tipo: "limitecatssemana",
+categoria: taller.categoria,
+};
+}
+}
 
-if coalesce(v_abierto_global, false) = false then
-raise exception 'Las inscripciones están cerradas.';
-end if;
+// LÍMITE POR CATEGORÍA EN EL MISMO DÍA:
+// SOLO Cocina y Deportes tienen este límite.
+//
+// Arte, Música, Ciencia, Técnica/Oficios, etc.
+// pueden tener más de un taller de la misma categoría
+// siempre que no se superpongan los horarios.
+if (catNorm === "cocina" || catNorm === "deportes") {
+const mismaCat = inscriptosDia.some(
+(t) => t.categoria.trim().toLowerCase() === catNorm,
+);
 
-if coalesce(v_abierto_dia, false) = false then
-raise exception 'Las inscripciones para el día % están cerradas.',
-v_taller.dia;
-end if;
+if (mismaCat) {
+return { tipo: "mismacategoria" };
+}
+}
 
-return new;
-end;
-$$;
+return null;
+}
 
--- Reasegurar los triggers con la función corregida.
-drop trigger if exists trg_validar_cupo_insert on public.inscripciones;
+export function textoMotivo(m: MotivoBloqueo): string {
+switch (m?.tipo) {
+case "cupolleno":
+return "Cupo completo";
 
-create trigger trg_validar_cupo_insert
-before insert on public.inscripciones
-for each row
-execute function public.validar_cupo_atomico();
+case "solapamiento":
+return "Se superpone con otro taller ese día";
 
-drop trigger if exists trg_validar_cupo_update on public.inscripciones;
+case "mismacategoria":
+return "Ya tenés un taller de esa categoría ese día";
 
-create trigger trg_validar_cupo_update
-before update on public.inscripciones
-for each row
-when (old.taller_id is distinct from new.taller_id)
-execute function public.validar_cupo_atomico();
+case "mismotallersemana":
+return "Ya estás anotado a este taller esta semana";
+
+case "limitecatssemana":
+return `Alcanzaste el máximo de 2 talleres de ${
+m?.categoria ?? "esa categoría"
+} en la semana`;
+
+case "yainscripto":
+return "Ya estás inscripto";
+
+case "noabierto":
+return "Inscripciones cerradas";
+
+default:
+return "";
+}
+}
