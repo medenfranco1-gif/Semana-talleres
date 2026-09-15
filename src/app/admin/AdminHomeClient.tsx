@@ -825,7 +825,7 @@ function Toggle({
 }
 
 // ---------- tab buscar alumno ----------
-function BuscarAlumnoTab() {
+function BuscarAlumnoTab({ talleres }: { talleres: TallerAdminData[] }) {
   const [query, setQuery] = useState("");
   const [resultados, setResultados] = useState<Array<{
     alumno_id: string;
@@ -841,7 +841,13 @@ function BuscarAlumnoTab() {
       fecha_inscripcion: string;
     }>;
   }> | null>(null);
+
   const [buscando, setBuscando] = useState(false);
+  const [procesando, setProcesando] = useState<string | null>(null);
+  const [cambiandoId, setCambiandoId] = useState<string | null>(null);
+  const [nuevoTallerId, setNuevoTallerId] = useState<Record<string, string>>({});
+  const [mensaje, setMensaje] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleBuscar() {
     if (!query || query.trim().length < 2) {
@@ -850,12 +856,77 @@ function BuscarAlumnoTab() {
     }
 
     setBuscando(true);
+    setMensaje(null);
+    setError(null);
+
     const res = await adminBuscarInscripcionesAlumnoAction(query);
+
     if (res.ok && res.resultados) {
       setResultados(res.resultados);
+    } else {
+      setError(res.error ?? "No se pudo realizar la búsqueda.");
     }
+
     setBuscando(false);
   }
+
+  async function handleBaja(inscripcionId: string) {
+    if (!confirm("¿Seguro que querés dar de baja esta inscripción?")) {
+      return;
+    }
+
+    setProcesando(inscripcionId);
+    setMensaje(null);
+    setError(null);
+
+    const res = await adminDarBajaAction(inscripcionId);
+
+    if (res.ok) {
+      setMensaje("Inscripción dada de baja correctamente.");
+      await handleBuscar();
+    } else {
+      setError(res.error ?? "No se pudo dar de baja la inscripción.");
+    }
+
+    setProcesando(null);
+  }
+
+  async function handleCambiar(inscripcionId: string) {
+    const nuevoId = nuevoTallerId[inscripcionId];
+
+    if (!nuevoId) {
+      setError("Seleccioná un taller nuevo.");
+      return;
+    }
+
+    setProcesando(inscripcionId);
+    setMensaje(null);
+    setError(null);
+
+    const res = await adminCambiarTallerAction(inscripcionId, nuevoId);
+
+    if (res.ok) {
+      setMensaje("Taller cambiado correctamente.");
+      setCambiandoId(null);
+      setNuevoTallerId((prev) => {
+        const next = { ...prev };
+        delete next[inscripcionId];
+        return next;
+      });
+      await handleBuscar();
+    } else {
+      setError(res.error ?? "No se pudo cambiar el taller.");
+    }
+
+    setProcesando(null);
+  }
+
+  const talleresOrdenados = [...talleres]
+    .filter((t) => t.activo)
+    .sort((a, b) => {
+      if (a.dia !== b.dia) return a.dia - b.dia;
+      return a.hora_inicio.localeCompare(b.hora_inicio);
+    });
 
   return (
     <div className="card p-4">
@@ -881,6 +952,18 @@ function BuscarAlumnoTab() {
         </button>
       </div>
 
+      {mensaje && (
+        <div className="mb-4 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          {mensaje}
+        </div>
+      )}
+
+      {error && (
+        <div className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       {resultados === null ? (
         <div className="text-center py-8 text-slate-500">
           Ingresá al menos 2 caracteres para buscar.
@@ -892,7 +975,10 @@ function BuscarAlumnoTab() {
       ) : (
         <div className="space-y-4">
           {resultados.map((alumno) => (
-            <div key={alumno.alumno_id} className="border border-slate-200 rounded-md p-4">
+            <div
+              key={alumno.alumno_id}
+              className="border border-slate-200 rounded-md p-4"
+            >
               <div className="mb-3">
                 <h3 className="font-semibold text-slate-900">
                   {alumno.nombre} {alumno.apellido}
@@ -909,23 +995,110 @@ function BuscarAlumnoTab() {
                   <p className="text-sm font-medium text-slate-700 mb-2">
                     Inscripciones ({alumno.inscripciones.length}):
                   </p>
-                  <div className="space-y-1">
+
+                  <div className="space-y-2">
                     {alumno.inscripciones.map((insc) => (
                       <div
                         key={insc.id}
-                        className="flex items-center justify-between text-sm bg-slate-50 rounded px-3 py-2"
+                        className="bg-slate-50 rounded px-3 py-3"
                       >
-                        <div>
-                          <span className="font-medium text-slate-900">
-                            {insc.taller_titulo}
-                          </span>
-                          <span className="text-slate-600 ml-2">
-                            {DIAS.find((d) => d.n === insc.taller_dia)?.label} {insc.taller_hora_inicio}
-                          </span>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <span className="font-medium text-slate-900">
+                              {insc.taller_titulo}
+                            </span>
+
+                            <span className="text-slate-600 ml-2">
+                              {DIAS.find((d) => d.n === insc.taller_dia)?.label}{" "}
+                              {insc.taller_hora_inicio}
+                            </span>
+
+                            <span className="text-xs text-slate-500 ml-2">
+                              {new Date(
+                                insc.fecha_inscripcion
+                              ).toLocaleDateString("es-AR")}
+                            </span>
+                          </div>
+
+                          <div className="flex gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setError(null);
+                                setMensaje(null);
+                                setCambiandoId(
+                                  cambiandoId === insc.id ? null : insc.id
+                                );
+                              }}
+                              disabled={procesando === insc.id}
+                              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                            >
+                              Cambiar taller
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleBaja(insc.id)}
+                              disabled={procesando === insc.id}
+                              className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {procesando === insc.id
+                                ? "Procesando..."
+                                : "Dar de baja"}
+                            </button>
+                          </div>
                         </div>
-                        <span className="text-xs text-slate-500">
-                          {new Date(insc.fecha_inscripcion).toLocaleDateString("es-AR")}
-                        </span>
+
+                        {cambiandoId === insc.id && (
+                          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                            <select
+                              value={nuevoTallerId[insc.id] ?? ""}
+                              onChange={(e) =>
+                                setNuevoTallerId((prev) => ({
+                                  ...prev,
+                                  [insc.id]: e.target.value,
+                                }))
+                              }
+                              className="input flex-1"
+                              disabled={procesando === insc.id}
+                            >
+                              <option value="">
+                                Seleccioná el nuevo taller...
+                              </option>
+
+                              {talleresOrdenados
+                                .filter((t) => t.id !== insc.taller_id)
+                                .map((t) => {
+                                  const disponibles =
+                                    t.cupo_max - t.inscriptos_reales;
+
+                                  return (
+                                    <option key={t.id} value={t.id}>
+                                      {DIAS.find((d) => d.n === t.dia)?.label}{" "}
+                                      {t.hora_inicio} — {t.titulo}
+                                      {" · "}
+                                      {t.categoria} · cupos:{" "}
+                                      {Math.max(0, disponibles)}
+                                    </option>
+                                  );
+                                })}
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() => handleCambiar(insc.id)}
+                              disabled={
+                                procesando === insc.id ||
+                                !nuevoTallerId[insc.id]
+                              }
+                              className="btn-primary px-4"
+                            >
+                              {procesando === insc.id
+                                ? "Guardando..."
+                                : "Confirmar cambio"}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
