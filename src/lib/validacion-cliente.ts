@@ -90,11 +90,13 @@ export function evaluarBloqueoCliente(
     }
   }
 
-  // misma categoría ese día (no repetir categoría en un mismo día)
-  const mismaCat = inscriptosDia.some((t) => t.categoria === taller.categoria);
-  if (mismaCat) return { tipo: "mismacategoria" };
+  // Solo Cocina y Deportes tienen límite de categoría por día.
+if (catNorm === "cocina" || catNorm === "deportes") {
+  const mismaCat = inscriptosDia.some(
+    (t) => t.categoria.trim().toLowerCase() === catNorm,
+  );
 
-  return null;
+  if (mismaCat) return { tipo: "mismacategoria" };
 }
 
 export function textoMotivo(m: MotivoBloqueo): string {
