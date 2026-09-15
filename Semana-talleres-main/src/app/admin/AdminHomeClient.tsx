@@ -1,0 +1,940 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import type { Categoria, Configuracion } from "@/lib/types";
+import { DIAS, fmtRango } from "@/lib/format";
+import {
+  actualizarConfigAction,
+  toggleTallerActivoAction,
+  eliminarTallerAction,
+  asignarPendientesAction,
+  adminVerInscriptosAction,
+  adminBuscarInscripcionesAlumnoAction,
+} from "./actions";
+import { TallerForm } from "./TallerForm";
+import { CategoriaManager } from "./CategoriaManager";
+import type { TallerAdminData } from "./page";
+
+interface Props {
+  talleres: TallerAdminData[];
+  categorias: Categoria[];
+  config: Configuracion | null;
+}
+
+type Tab = "talleres" | "buscar" | "config" | "categorias";
+type FiltroDia = "todos" | "1" | "2" | "3";
+type OrdenTalleres = "sobrecupo" | "alumnos" | "dia_hora" | "nombre";
+
+export function AdminHomeClient({ talleres, categorias, config }: Props) {
+  const [tab, setTab] = useState<Tab>("talleres");
+  const [showForm, setShowForm] = useState(false);
+  const [editTaller, setEditTaller] = useState<TallerAdminData | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; texto: string } | null>(null);
+
+  return (
+    <div>
+      {/* tabs */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {(
+          [
+            { k: "talleres", label: "Talleres" },
+            { k: "buscar", label: "Buscar alumno" },
+            { k: "config", label: "Inscripciones" },
+            { k: "categorias", label: "Categorías" },
+          ] as { k: Tab; label: string }[]
+        ).map((t) => (
+          <button
+            key={t.k}
+            onClick={() => setTab(t.k)}
+            className={`btn text-xs sm:text-sm ${
+              tab === t.k
+                ? "bg-brand-600 text-white"
+                : "border border-slate-300 bg-white text-slate-700"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {msg && (
+        <div
+          className={`mb-4 rounded-md border p-3 text-sm ${
+            msg.ok
+              ? "border-green-200 bg-green-50 text-green-700"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {msg.texto}
+        </div>
+      )}
+
+      {tab === "talleres" && (
+        <TalleresTab
+          talleres={talleres}
+          categorias={categorias}
+          showForm={showForm}
+          setShowForm={setShowForm}
+          editTaller={editTaller}
+          setEditTaller={setEditTaller}
+          onMsg={setMsg}
+        />
+      )}
+
+      {tab === "buscar" && <BuscarAlumnoTab />}
+
+      {tab === "config" && (
+        <ConfigTab config={config} onMsg={setMsg} />
+      )}
+
+      {tab === "categorias" && (
+        <CategoriaManager categorias={categorias} onMsg={setMsg} />
+      )}
+    </div>
+  );
+}
+
+// ---------- tab talleres ----------
+function TalleresTab({
+  talleres,
+  categorias,
+  showForm,
+  setShowForm,
+  editTaller,
+  setEditTaller,
+  onMsg,
+}: {
+  talleres: TallerAdminData[];
+  categorias: Categoria[];
+  showForm: boolean;
+  setShowForm: (v: boolean) => void;
+  editTaller: TallerAdminData | null;
+  setEditTaller: (v: TallerAdminData | null) => void;
+  onMsg: (m: { ok: boolean; texto: string }) => void;
+}) {
+  const [filtroDia, setFiltroDia] = useState<FiltroDia>("todos");
+  const [orden, setOrden] = useState<OrdenTalleres>("sobrecupo");
+  const [inscriptosTaller, setInscriptosTaller] = useState<TallerAdminData | null>(null);
+  const [inscriptos, setInscriptos] = useState<Array<{
+    id: string;
+    alumno_id: string;
+    nombre: string;
+    apellido: string;
+    email: string;
+    curso: string;
+    division: string;
+    fecha_inscripcion: string;
+    dentro_cupo: boolean;
+  }> | null>(null);
+  const [cargandoInscriptos, setCargandoInscriptos] = useState(false);
+
+  // Filtrar y ordenar client-side (0 requests adicionales)
+  const talleresFiltrados = useMemo(() => {
+    let resultado = [...talleres];
+
+    // Filtro por día
+    if (filtroDia !== "todos") {
+      const diaNum = parseInt(filtroDia) as 1 | 2 | 3;
+      resultado = resultado.filter((t) => t.dia === diaNum);
+    }
+
+    // Orden
+    switch (orden) {
+      case "sobrecupo":
+        resultado.sort((a, b) => {
+          // Mayor excedente primero
+          if (b.excedente !== a.excedente) return b.excedente - a.excedente;
+          // Luego por día y hora
+          if (a.dia !== b.dia) return a.dia - b.dia;
+          return a.hora_inicio.localeCompare(b.hora_inicio);
+        });
+        break;
+      case "alumnos":
+        resultado.sort((a, b) => b.inscriptos_reales - a.inscriptos_reales);
+        break;
+      case "dia_hora":
+        resultado.sort((a, b) => {
+          if (a.dia !== b.dia) return a.dia - b.dia;
+          return a.hora_inicio.localeCompare(b.hora_inicio);
+        });
+        break;
+      case "nombre":
+        resultado.sort((a, b) => a.titulo.localeCompare(b.titulo));
+        break;
+    }
+
+    return resultado;
+  }, [talleres, filtroDia, orden]);
+
+  async function handleVerInscriptos(t: TallerAdminData) {
+    setInscriptosTaller(t);
+    setCargandoInscriptos(true);
+    setInscriptos(null);
+
+    const res = await adminVerInscriptosAction(t.id);
+    if (res.ok && res.inscriptos) {
+      setInscriptos(res.inscriptos);
+    } else {
+      onMsg({ ok: false, texto: res.error ?? "Error al cargar inscriptos" });
+    }
+    setCargandoInscriptos(false);
+  }
+
+  async function handleToggle(t: TallerAdminData) {
+    const res = await toggleTallerActivoAction(t.id, !t.activo);
+    onMsg(
+      res.ok
+        ? { ok: true, texto: "Taller actualizado." }
+        : { ok: false, texto: res.error ?? "Error" },
+    );
+  }
+  async function handleDelete(t: TallerAdminData) {
+    if (!confirm(`¿Eliminar "${t.titulo}"? Se borrarán sus inscripciones.`)) return;
+    const res = await eliminarTallerAction(t.id);
+    onMsg(
+      res.ok
+        ? { ok: true, texto: "Taller eliminado." }
+        : { ok: false, texto: res.error ?? "Error" },
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-semibold text-slate-800">
+          Talleres ({talleresFiltrados.length} de {talleres.length})
+        </h2>
+        <button
+          onClick={() => {
+            setEditTaller(null);
+            setShowForm(true);
+          }}
+          className="btn-primary text-sm"
+        >
+          + Nuevo taller
+        </button>
+      </div>
+
+      {/* Filtros client-side */}
+      <div className="card mb-4 p-3">
+        <div className="flex flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700">Día:</label>
+            <select
+              value={filtroDia}
+              onChange={(e) => setFiltroDia(e.target.value as FiltroDia)}
+              className="input py-1 px-2 text-sm"
+            >
+              <option value="todos">Todos</option>
+              <option value="1">Día 1</option>
+              <option value="2">Día 2</option>
+              <option value="3">Día 3</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-slate-700">Orden:</label>
+            <select
+              value={orden}
+              onChange={(e) => setOrden(e.target.value as OrdenTalleres)}
+              className="input py-1 px-2 text-sm"
+            >
+              <option value="sobrecupo">Mayor sobrecupo</option>
+              <option value="alumnos">Más alumnos</option>
+              <option value="dia_hora">Día y hora</option>
+              <option value="nombre">Nombre</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {showForm && (
+        <div className="card mb-4 p-4">
+          <TallerForm
+            taller={editTaller}
+            categorias={categorias}
+            onCancel={() => {
+              setShowForm(false);
+              setEditTaller(null);
+            }}
+            onDone={(ok, texto) => {
+              onMsg({ ok, texto });
+              if (ok) {
+                setShowForm(false);
+                setEditTaller(null);
+              }
+            }}
+          />
+        </div>
+      )}
+
+      {talleresFiltrados.length === 0 ? (
+        <div className="card p-6 text-center text-slate-500">
+          {talleres.length === 0
+            ? "No hay talleres cargados."
+            : "No hay talleres con ese filtro."}
+        </div>
+      ) : (
+        <>
+          {/* Vista mobile: cards */}
+          <div className="space-y-3 lg:hidden">
+            {talleresFiltrados.map((t) => {
+              const inscriptos = t.inscriptos_reales;
+              const excedente = t.excedente;
+              return (
+                <div key={t.id} className="card p-4">
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-slate-900">{t.titulo}</h3>
+                      <div className="mt-1 text-sm text-slate-600">
+                        {t.profesor}
+                        {t.aula && ` · ${t.aula}`}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleToggle(t)}
+                      className={`badge cursor-pointer ${
+                        t.activo
+                          ? "bg-green-100 text-green-700"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {t.activo ? "Activo" : "Inactivo"}
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 text-sm text-slate-600">
+                    <span className="badge bg-slate-100">
+                      {DIAS.find((d) => d.n === t.dia)?.label}
+                    </span>
+                    <span>{fmtRango(t.hora_inicio, t.hora_fin)}</span>
+                    <span className="badge bg-slate-100">{t.categoria}</span>
+                    <span>
+                      {inscriptos}/{t.cupo_max} cupos
+                      {excedente > 0 && (
+                        <span className="ml-1 text-red-600 font-semibold">
+                          +{excedente} excedentes
+                        </span>
+                      )}
+                    </span>
+                    {!t.requiere_materiales && (
+                      <span className="badge bg-amber-100 text-amber-700">
+                        🥫 pide alimento
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleVerInscriptos(t)}
+                      className="btn-primary flex-1 px-3 py-1.5 text-xs"
+                    >
+                      Ver inscriptos
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditTaller(t);
+                        setShowForm(true);
+                      }}
+                      className="btn-secondary flex-1 px-3 py-1.5 text-xs"
+                    >
+                      Editar
+                    </button>
+                    <a
+                      href={`/admin/export/taller/${t.id}?format=xlsx`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-secondary px-3 py-1.5 text-xs"
+                    >
+                      Excel
+                    </a>
+                    <a
+                      href={`/admin/export/taller/${t.id}?format=pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-secondary px-3 py-1.5 text-xs"
+                    >
+                      PDF
+                    </a>
+                    <button
+                      onClick={() => handleDelete(t)}
+                      className="btn-danger px-3 py-1.5 text-xs"
+                    >
+                      Borrar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Vista desktop: tabla */}
+          <div className="card hidden overflow-hidden lg:block">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-slate-600">Título</th>
+                    <th className="px-3 py-2 text-left font-medium text-slate-600">Día</th>
+                    <th className="px-3 py-2 text-left font-medium text-slate-600">Hora</th>
+                    <th className="px-3 py-2 text-left font-medium text-slate-600">Cat.</th>
+                    <th className="px-3 py-2 text-left font-medium text-slate-600">Cupos</th>
+                    <th className="px-3 py-2 text-left font-medium text-slate-600">Estado</th>
+                    <th className="px-3 py-2 text-right font-medium text-slate-600">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {talleresFiltrados.map((t) => {
+                    const inscriptos = t.inscriptos_reales;
+                    const excedente = t.excedente;
+                    return (
+                      <tr key={t.id} className="hover:bg-slate-50">
+                        <td className="px-3 py-2">
+                          <div className="font-medium text-slate-900">{t.titulo}</div>
+                          <div className="text-xs text-slate-500">
+                            {t.profesor}
+                            {t.aula && ` · ${t.aula}`}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-slate-600">
+                          {DIAS.find((d) => d.n === t.dia)?.label}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600">
+                          {fmtRango(t.hora_inicio, t.hora_fin)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="badge bg-slate-100 text-slate-600">
+                            {t.categoria}
+                          </span>
+                          {!t.requiere_materiales && (
+                            <span className="badge ml-1 bg-amber-100 text-amber-700">
+                              🥫
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600">
+                          <div>
+                            {inscriptos}/{t.cupo_max}
+                          </div>
+                          {excedente > 0 && (
+                            <div className="text-xs text-red-600 font-semibold">
+                              +{excedente} exced.
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => handleToggle(t)}
+                            className={`badge cursor-pointer ${
+                              t.activo
+                                ? "bg-green-100 text-green-700"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {t.activo ? "Activo" : "Inactivo"}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex flex-wrap justify-end gap-1">
+                            <button
+                              onClick={() => handleVerInscriptos(t)}
+                              className="btn-primary px-2 py-1 text-xs"
+                            >
+                              Ver inscriptos
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditTaller(t);
+                                setShowForm(true);
+                              }}
+                              className="btn-secondary px-2 py-1 text-xs"
+                            >
+                              Editar
+                            </button>
+                            <a
+                              href={`/admin/export/taller/${t.id}?format=xlsx`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn-secondary px-2 py-1 text-xs"
+                            >
+                              Excel
+                            </a>
+                            <a
+                              href={`/admin/export/taller/${t.id}?format=pdf`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="btn-secondary px-2 py-1 text-xs"
+                            >
+                              PDF
+                            </a>
+                            <button
+                              onClick={() => handleDelete(t)}
+                              className="btn-danger px-2 py-1 text-xs"
+                            >
+                              Borrar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Modal de inscriptos */}
+      {inscriptosTaller && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="card max-h-[90vh] w-full max-w-4xl overflow-hidden flex flex-col">
+            <div className="border-b border-slate-200 p-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Inscriptos en: {inscriptosTaller.titulo}
+                </h3>
+                <p className="text-sm text-slate-600">
+                  {inscriptosTaller.inscriptos_reales}/{inscriptosTaller.cupo_max} cupos
+                  {inscriptosTaller.inscriptos_reales > inscriptosTaller.cupo_max && (
+                    <span className="ml-2 text-red-600 font-semibold">
+                      (+{inscriptosTaller.inscriptos_reales - inscriptosTaller.cupo_max} excedentes)
+                    </span>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setInscriptosTaller(null);
+                  setInscriptos(null);
+                }}
+                className="btn-secondary px-3 py-1"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {cargandoInscriptos ? (
+                <div className="text-center py-8 text-slate-500">
+                  Cargando inscriptos...
+                </div>
+              ) : !inscriptos || inscriptos.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  No hay inscriptos en este taller.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {inscriptos.map((insc, idx) => (
+                    <div
+                      key={insc.id}
+                      className={`border rounded-md p-3 ${
+                        insc.dentro_cupo
+                          ? "border-green-200 bg-green-50"
+                          : "border-red-200 bg-red-50"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <div className="font-medium text-slate-900">
+                            {idx + 1}. {insc.nombre} {insc.apellido}
+                          </div>
+                          <div className="text-sm text-slate-600">
+                            {insc.email}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            {insc.curso} {insc.division} · Inscripto: {new Date(insc.fecha_inscripcion).toLocaleString("es-AR")}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {insc.dentro_cupo ? (
+                            <span className="badge bg-green-100 text-green-700">
+                              DENTRO DEL CUPO
+                            </span>
+                          ) : (
+                            <span className="badge bg-red-100 text-red-700">
+                              EXCEDENTE
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- tab config ----------
+function ConfigTab({
+  config,
+  onMsg,
+}: {
+  config: Configuracion | null;
+  onMsg: (m: { ok: boolean; texto: string }) => void;
+}) {
+  const [global, setGlobal] = useState(config?.inscripciones_abiertas_global ?? false);
+  const [d1, setD1] = useState(config?.inscripciones_abiertas_dia1 ?? false);
+  const [d2, setD2] = useState(config?.inscripciones_abiertas_dia2 ?? false);
+  const [d3, setD3] = useState(config?.inscripciones_abiertas_dia3 ?? false);
+  // Franjas MANUALES Día 1
+  const [f1, setF1] = useState(config?.franja_1_abierta ?? false);
+  const [f2, setF2] = useState(config?.franja_2_abierta ?? false);
+  const [f3, setF3] = useState(config?.franja_3_abierta ?? false);
+  // Franjas MANUALES Día 2
+  const [d2f1, setD2F1] = useState(config?.dia2_franja_1_abierta ?? false);
+  const [d2f2, setD2F2] = useState(config?.dia2_franja_2_abierta ?? false);
+  const [d2f3, setD2F3] = useState(config?.dia2_franja_3_abierta ?? false);
+  // Franjas MANUALES Día 3
+  const [d3f1, setD3F1] = useState(config?.dia3_franja_1_abierta ?? false);
+  const [d3f2, setD3F2] = useState(config?.dia3_franja_2_abierta ?? false);
+  const [d3f3, setD3F3] = useState(config?.dia3_franja_3_abierta ?? false);
+  const [saving, setSaving] = useState(false);
+
+  async function guardar() {
+    setSaving(true);
+    const res = await actualizarConfigAction({
+      inscripciones_abiertas_global: global,
+      inscripciones_abiertas_dia1: d1,
+      inscripciones_abiertas_dia2: d2,
+      inscripciones_abiertas_dia3: d3,
+      franja_1_abierta: f1,
+      franja_2_abierta: f2,
+      franja_3_abierta: f3,
+      dia2_franja_1_abierta: d2f1,
+      dia2_franja_2_abierta: d2f2,
+      dia2_franja_3_abierta: d2f3,
+      dia3_franja_1_abierta: d3f1,
+      dia3_franja_2_abierta: d3f2,
+      dia3_franja_3_abierta: d3f3,
+    });
+    setSaving(false);
+    onMsg(
+      res.ok
+        ? { ok: true, texto: "Configuración guardada." }
+        : { ok: false, texto: res.error ?? "Error" },
+    );
+  }
+
+  const toggles: { label: string; val: boolean; set: (v: boolean) => void }[] = [
+    { label: "Abrir inscripciones globalmente", val: global, set: setGlobal },
+    { label: "Inscripciones abiertas — Día 1", val: d1, set: setD1 },
+    { label: "Inscripciones abiertas — Día 2", val: d2, set: setD2 },
+    { label: "Inscripciones abiertas — Día 3", val: d3, set: setD3 },
+  ];
+
+  // Franjas manuales (controles independientes por día)
+  const franjasDia1: {
+    label: string;
+    detalle: string;
+    val: boolean;
+    set: (v: boolean) => void;
+  }[] = [
+    { label: "Día 1 - Franja 1", detalle: "Talleres 08:00–09:30", val: f1, set: setF1 },
+    { label: "Día 1 - Franja 2", detalle: "Talleres 10:00–12:00", val: f2, set: setF2 },
+    { label: "Día 1 - Franja 3", detalle: "Talleres 13:00–15:00", val: f3, set: setF3 },
+  ];
+
+  const franjasDia2: {
+    label: string;
+    detalle: string;
+    val: boolean;
+    set: (v: boolean) => void;
+  }[] = [
+    { label: "Día 2 - Franja 1", detalle: "Talleres 08:00–09:30", val: d2f1, set: setD2F1 },
+    { label: "Día 2 - Franja 2", detalle: "Talleres 10:00–12:00", val: d2f2, set: setD2F2 },
+    { label: "Día 2 - Franja 3", detalle: "Talleres 13:00–15:00", val: d2f3, set: setD2F3 },
+  ];
+
+  const franjasDia3: {
+    label: string;
+    detalle: string;
+    val: boolean;
+    set: (v: boolean) => void;
+  }[] = [
+    { label: "Día 3 - Franja 1", detalle: "Talleres 08:00–09:30", val: d3f1, set: setD3F1 },
+    { label: "Día 3 - Franja 2", detalle: "Talleres 10:00–12:00", val: d3f2, set: setD3F2 },
+    { label: "Día 3 - Franja 3", detalle: "Talleres 13:00–15:00", val: d3f3, set: setD3F3 },
+  ];
+
+  return (
+    <div className="card max-w-full p-4 sm:max-w-lg sm:p-5">
+      <h2 className="mb-4 text-lg font-semibold text-slate-800">
+        Apertura de inscripciones
+      </h2>
+      <p className="mb-4 text-sm text-slate-600">
+        Para que un alumno pueda inscribirse, el global <strong> y </strong> el
+        día específico deben estar abiertos.
+      </p>
+      <div className="space-y-3">
+        {toggles.map((t) => (
+          <label
+            key={t.label}
+            className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 p-3"
+          >
+            <span className="text-sm font-medium text-slate-700">{t.label}</span>
+            <Toggle checked={t.val} onChange={t.set} />
+          </label>
+        ))}
+      </div>
+
+      <h3 className="mb-2 mt-6 text-base font-semibold text-slate-800">
+        Control de franjas por día (manual)
+      </h3>
+      <p className="mb-3 text-sm text-slate-600">
+        Cada día tiene sus propios controles de franja. Abrir/cerrar una franja de un día NO
+        afecta otros días.
+      </p>
+
+      {/* Día 1 */}
+      <div className="mb-4 space-y-3">
+        <h4 className="text-sm font-medium text-slate-700">Día 1</h4>
+        {franjasDia1.map((f) => (
+          <label
+            key={f.label}
+            className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 p-3"
+          >
+            <span className="flex flex-col">
+              <span className="text-sm font-medium text-slate-700">{f.label}</span>
+              <span className="text-xs text-slate-500">{f.detalle}</span>
+            </span>
+            <Toggle checked={f.val} onChange={f.set} />
+          </label>
+        ))}
+      </div>
+
+      {/* Día 2 */}
+      <div className="mb-4 space-y-3">
+        <h4 className="text-sm font-medium text-slate-700">Día 2</h4>
+        {franjasDia2.map((f) => (
+          <label
+            key={f.label}
+            className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 p-3"
+          >
+            <span className="flex flex-col">
+              <span className="text-sm font-medium text-slate-700">{f.label}</span>
+              <span className="text-xs text-slate-500">{f.detalle}</span>
+            </span>
+            <Toggle checked={f.val} onChange={f.set} />
+          </label>
+        ))}
+      </div>
+
+      {/* Día 3 */}
+      <div className="mb-4 space-y-3">
+        <h4 className="text-sm font-medium text-slate-700">Día 3</h4>
+        {franjasDia3.map((f) => (
+          <label
+            key={f.label}
+            className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-200 p-3"
+          >
+            <span className="flex flex-col">
+              <span className="text-sm font-medium text-slate-700">{f.label}</span>
+              <span className="text-xs text-slate-500">{f.detalle}</span>
+            </span>
+            <Toggle checked={f.val} onChange={f.set} />
+          </label>
+        ))}
+      </div>
+
+      <button onClick={guardar} disabled={saving} className="btn-primary mt-4 w-full sm:w-auto">
+        {saving ? "Guardando…" : "Guardar"}
+      </button>
+
+      <AsignarPendientes onMsg={onMsg} />
+    </div>
+  );
+}
+
+// ---------- asignación automática de alumnos sin taller ----------
+function AsignarPendientes({
+  onMsg,
+}: {
+  onMsg: (m: { ok: boolean; texto: string }) => void;
+}) {
+  const [asignando, setAsignando] = useState(false);
+
+  async function handleAsignar() {
+    const ok = confirm(
+      "Esto va a anotar automáticamente, en un taller al azar con cupo disponible, a todos los alumnos que todavía no tengan ninguna inscripción. ¿Continuar?",
+    );
+    if (!ok) return;
+    setAsignando(true);
+    const res = await asignarPendientesAction();
+    setAsignando(false);
+    if (!res.ok) {
+      onMsg({ ok: false, texto: res.error ?? "Error al asignar." });
+      return;
+    }
+    const partes = [`${res.asignados ?? 0} alumno(s) asignado(s) al azar.`];
+    if (res.sinCupo) {
+      partes.push(`${res.sinCupo} sin taller (no quedaba cupo en ninguno).`);
+    }
+    onMsg({ ok: true, texto: partes.join(" ") });
+  }
+
+  return (
+    <div className="mt-6 border-t border-slate-200 pt-4">
+      <h3 className="text-sm font-semibold text-slate-800">
+        Alumnos sin ningún taller
+      </h3>
+      <p className="mt-1 text-sm text-slate-600">
+        Anota automáticamente, al azar y en un taller con cupo disponible, a
+        los alumnos que no se hayan inscripto a nada. Pensado para correr una
+        sola vez, cerca del cierre de inscripciones.
+      </p>
+      <button
+        onClick={handleAsignar}
+        disabled={asignando}
+        className="btn-secondary mt-3 w-full sm:w-auto"
+      >
+        {asignando ? "Asignando…" : "Asignar alumnos sin taller"}
+      </button>
+    </div>
+  );
+}
+
+function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
+        checked ? "bg-brand-600" : "bg-slate-300"
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+          checked ? "translate-x-5" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
+}
+
+// ---------- tab buscar alumno ----------
+function BuscarAlumnoTab() {
+  const [query, setQuery] = useState("");
+  const [resultados, setResultados] = useState<Array<{
+    alumno_id: string;
+    nombre: string;
+    apellido: string;
+    email: string;
+    inscripciones: Array<{
+      id: string;
+      taller_id: string;
+      taller_titulo: string;
+      taller_dia: number;
+      taller_hora_inicio: string;
+      fecha_inscripcion: string;
+    }>;
+  }> | null>(null);
+  const [buscando, setBuscando] = useState(false);
+
+  async function handleBuscar() {
+    if (!query || query.trim().length < 2) {
+      setResultados([]);
+      return;
+    }
+
+    setBuscando(true);
+    const res = await adminBuscarInscripcionesAlumnoAction(query);
+    if (res.ok && res.resultados) {
+      setResultados(res.resultados);
+    }
+    setBuscando(false);
+  }
+
+  return (
+    <div className="card p-4">
+      <h2 className="mb-4 text-lg font-semibold text-slate-800">
+        Buscar inscripciones de alumno
+      </h2>
+
+      <div className="mb-4 flex gap-2">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
+          placeholder="Nombre, apellido o email..."
+          className="input flex-1"
+        />
+        <button
+          onClick={handleBuscar}
+          disabled={buscando}
+          className="btn-primary px-4"
+        >
+          {buscando ? "Buscando..." : "Buscar"}
+        </button>
+      </div>
+
+      {resultados === null ? (
+        <div className="text-center py-8 text-slate-500">
+          Ingresá al menos 2 caracteres para buscar.
+        </div>
+      ) : resultados.length === 0 ? (
+        <div className="text-center py-8 text-slate-500">
+          No se encontraron alumnos.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {resultados.map((alumno) => (
+            <div key={alumno.alumno_id} className="border border-slate-200 rounded-md p-4">
+              <div className="mb-3">
+                <h3 className="font-semibold text-slate-900">
+                  {alumno.nombre} {alumno.apellido}
+                </h3>
+                <p className="text-sm text-slate-600">{alumno.email}</p>
+              </div>
+
+              {alumno.inscripciones.length === 0 ? (
+                <p className="text-sm text-slate-500 italic">
+                  No tiene inscripciones.
+                </p>
+              ) : (
+                <div>
+                  <p className="text-sm font-medium text-slate-700 mb-2">
+                    Inscripciones ({alumno.inscripciones.length}):
+                  </p>
+                  <div className="space-y-1">
+                    {alumno.inscripciones.map((insc) => (
+                      <div
+                        key={insc.id}
+                        className="flex items-center justify-between text-sm bg-slate-50 rounded px-3 py-2"
+                      >
+                        <div>
+                          <span className="font-medium text-slate-900">
+                            {insc.taller_titulo}
+                          </span>
+                          <span className="text-slate-600 ml-2">
+                            {DIAS.find((d) => d.n === insc.taller_dia)?.label} {insc.taller_hora_inicio}
+                          </span>
+                        </div>
+                        <span className="text-xs text-slate-500">
+                          {new Date(insc.fecha_inscripcion).toLocaleDateString("es-AR")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

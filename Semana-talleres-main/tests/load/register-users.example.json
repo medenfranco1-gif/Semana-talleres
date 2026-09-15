@@ -1,0 +1,182 @@
+[
+  {
+    "nombre": "Test",
+    "apellido": "Alumno01",
+    "documento": "90000001",
+    "curso": "5°",
+    "division": "A",
+    "email": "medenfranco1+loadtest01@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno02",
+    "documento": "90000002",
+    "curso": "5°",
+    "division": "A",
+    "email": "medenfranco1+loadtest02@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno03",
+    "documento": "90000003",
+    "curso": "5°",
+    "division": "B",
+    "email": "medenfranco1+loadtest03@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno04",
+    "documento": "90000004",
+    "curso": "4°",
+    "division": "A",
+    "email": "medenfranco1+loadtest04@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno05",
+    "documento": "90000005",
+    "curso": "4°",
+    "division": "B",
+    "email": "medenfranco1+loadtest05@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno06",
+    "documento": "90000006",
+    "curso": "3°",
+    "division": "A",
+    "email": "medenfranco1+loadtest06@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno07",
+    "documento": "90000007",
+    "curso": "3°",
+    "division": "B",
+    "email": "medenfranco1+loadtest07@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno08",
+    "documento": "90000008",
+    "curso": "2°",
+    "division": "A",
+    "email": "medenfranco1+loadtest08@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno09",
+    "documento": "90000009",
+    "curso": "2°",
+    "division": "B",
+    "email": "medenfranco1+loadtest09@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno10",
+    "documento": "90000010",
+    "curso": "1°",
+    "division": "A",
+    "email": "medenfranco1+loadtest10@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno11",
+    "documento": "90000011",
+    "curso": "1°",
+    "division": "B",
+    "email": "medenfranco1+loadtest11@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno12",
+    "documento": "90000012",
+    "curso": "6°",
+    "division": "A",
+    "email": "medenfranco1+loadtest12@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno13",
+    "documento": "90000013",
+    "curso": "6°",
+    "division": "B",
+    "email": "medenfranco1+loadtest13@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno14",
+    "documento": "90000014",
+    "curso": "5°",
+    "division": "C",
+    "email": "medenfranco1+loadtest14@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno15",
+    "documento": "90000015",
+    "curso": "4°",
+    "division": "C",
+    "email": "medenfranco1+loadtest15@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno16",
+    "documento": "90000016",
+    "curso": "3°",
+    "division": "C",
+    "email": "medenfranco1+loadtest16@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno17",
+    "documento": "90000017",
+    "curso": "2°",
+    "division": "C",
+    "email": "medenfranco1+loadtest17@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno18",
+    "documento": "90000018",
+    "curso": "1°",
+    "division": "C",
+    "email": "medenfranco1+loadtest18@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno19",
+    "documento": "90000019",
+    "curso": "6°",
+    "division": "C",
+    "email": "medenfranco1+loadtest19@gmail.com",
+    "password": "TestPassword123!"
+  },
+  {
+    "nombre": "Test",
+    "apellido": "Alumno20",
+    "documento": "90000020",
+    "curso": "5°",
+    "division": "D",
+    "email": "medenfranco1+loadtest20@gmail.com",
+    "password": "TestPassword123!"
+  }
+]

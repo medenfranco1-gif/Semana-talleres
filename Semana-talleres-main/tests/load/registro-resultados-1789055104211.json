@@ -1,0 +1,10 @@
+[
+  {
+    "email": "medenfranco1+loadtest01@gmail.com",
+    "success": false,
+    "duration_ms": 15631,
+    "status": "error",
+    "final_url": "http://localhost:3000/registro",
+    "error_message": "Demasiados intentos. Esperá unos minutos."
+  }
+]
